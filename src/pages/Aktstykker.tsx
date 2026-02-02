@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { usePerioder, useAktstykker, useAktstykkePdfUrls } from '../hooks/useAktstykker'
+import { usePerioder, useAktstykker } from '../hooks/useAktstykker'
+import type { Periode } from '../types/ft'
 import type { Sag } from '../types/ft'
 import StatKort from '../components/StatKort'
 import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
-import AktsTidslinje from '../components/AktsTidslinje'
+
 import AiSammenfatning from '../components/AiSammenfatning'
 import CopyButton from '../components/CopyButton'
-import { aktstykkerToCsv, downloadCsv } from '../lib/csv'
+import { aktstykkerToCsv, aktstykkerTilChatGpt, downloadCsv } from '../lib/csv'
+import { copyToClipboard } from '../lib/clipboard'
 
 function formatDato(dato: string): string {
   return new Date(dato).toLocaleDateString('da-DK', {
@@ -30,7 +32,7 @@ function getAfgørelsesBadge(kode: string | null) {
   }
 }
 
-function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: string; sager: Sag[]; pdfUrls: Record<number, string | null> }) {
+function MinisteriumSektion({ ministerium, sager, periodeKode }: { ministerium: string; sager: Sag[]; periodeKode: string | null }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -58,7 +60,7 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
       {open && (
         <div className="border-t border-gray-100 dark:border-gray-700">
           {sager.map((sag) => {
-            const pdfUrl = pdfUrls[sag.id] || aktstykkePdfUrl(sag)
+            const pdfUrl = aktstykkeFtUrl(sag, periodeKode)
             return (
               <div
                 key={sag.id}
@@ -102,9 +104,11 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
   )
 }
 
-function aktstykkePdfUrl(sag: Sag): string | null {
-  if (!sag.nummerprefix || !sag.nummernumerisk || !sag.periodeid) return null
-  return `https://www.ft.dk/samling/${sag.periodeid}/aktstykke/${sag.nummerprefix.toLowerCase()}${sag.nummernumerisk}/index.htm`
+function aktstykkeFtUrl(sag: Sag, periodeKode: string | null): string | null {
+  if (!sag.nummernumerisk || !periodeKode) return null
+  // ft.dk URL-mønster: /samling/20241/aktstykke/aktstk12/index.htm
+  const prefix = (sag.nummerprefix || 'Aktstk.').replace('.', '').toLowerCase()
+  return `https://www.ft.dk/samling/${periodeKode}/aktstykke/${prefix}${sag.nummernumerisk}/index.htm`
 }
 
 export default function Aktstykker() {
@@ -115,12 +119,15 @@ export default function Aktstykker() {
   const aktivPeriode = selectedPeriode ?? defaultPeriode
 
   const aktstykker = useAktstykker(aktivPeriode)
-  const pdfUrls = useAktstykkePdfUrls(aktstykker.data?.value)
+
+  // Find periode-kode for ft.dk URL'er (f.eks. "20241")
+  const periodeKode = perioder.data?.find((p: Periode) => p.id === aktivPeriode)?.kode ?? null
 
   // Filtre
   const [search, setSearch] = useState('')
   const [selectedMinisterium, setSelectedMinisterium] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(false)
+  const [chatGptCopied, setChatGptCopied] = useState(false)
 
   // Gruppér og filtrer
   const { grouped, ministerier, stats, allFiltered } = useMemo(() => {
@@ -213,12 +220,11 @@ export default function Aktstykker() {
 
       {/* Action-knapper */}
       <div className="flex flex-wrap gap-3 mb-6">
-        {pdfUrls.data && Object.values(pdfUrls.data).some(Boolean) && (
+        {periodeKode && allFiltered.length > 0 && (
           <button
             onClick={() => {
-              const filteredIds = grouped.flatMap(([, sager]) => sager.map(s => s.id))
-              const urls = filteredIds
-                .map(id => pdfUrls.data![id])
+              const urls = allFiltered
+                .map(s => aktstykkeFtUrl(s, periodeKode))
                 .filter((url): url is string => !!url)
                 .slice(0, 10)
               urls.forEach(url => window.open(url, '_blank'))
@@ -255,6 +261,37 @@ export default function Aktstykker() {
           </svg>
           Søg i tekst
         </button>
+        {allFiltered.length > 0 && (
+          <button
+            onClick={async () => {
+              const tekst = aktstykkerTilChatGpt(allFiltered, selectedMinisterium ?? undefined)
+              await copyToClipboard(tekst)
+              setChatGptCopied(true)
+              setTimeout(() => setChatGptCopied(false), 3000)
+            }}
+            className={`inline-flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm font-medium ${
+              chatGptCopied
+                ? 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            {chatGptCopied ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Kopieret! Indsæt i ChatGPT
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Kopiér til ChatGPT ({allFiltered.length} aktstykker)
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* AI panel */}
@@ -296,13 +333,6 @@ export default function Aktstykker() {
         />
       </div>
 
-      {/* Tidslinje */}
-      {aktstykker.data && aktstykker.data.value.length > 0 && (
-        <div className="mb-6">
-          <AktsTidslinje sager={aktstykker.data.value} />
-        </div>
-      )}
-
       {/* Loading */}
       {aktstykker.isLoading && (
         <div className="space-y-4">
@@ -333,7 +363,7 @@ export default function Aktstykker() {
             </div>
           ) : (
             grouped.map(([ministerium, sager]) => (
-              <MinisteriumSektion key={ministerium} ministerium={ministerium} sager={sager} pdfUrls={pdfUrls.data ?? {}} />
+              <MinisteriumSektion key={ministerium} ministerium={ministerium} sager={sager} periodeKode={periodeKode} />
             ))
           )}
         </div>

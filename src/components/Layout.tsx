@@ -11,7 +11,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/soeg', label: 'Søg' },
     { to: '/aktstykker', label: 'Aktstykker' },
     { to: '/statistik', label: 'Statistik' },
-    { to: '/sammenlign', label: 'Sammenlign' },
   ]
 
   return (
