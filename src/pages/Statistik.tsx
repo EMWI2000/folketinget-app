@@ -32,7 +32,7 @@ export default function Statistik() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Statistik</h2>
-          <p className="text-gray-500 text-sm">Overblik over data i Folketingets åbne data</p>
+          <p className="text-gray-500 text-sm">Statistik for den valgte folketingssamling. Sager fordelt efter type og aktstykker fordelt efter ansvarligt ministerium.</p>
         </div>
         <PeriodeSelect
           perioder={perioder.data}

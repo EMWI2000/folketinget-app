@@ -2,10 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchSagerCount, fetchAfstemningerCount, fetchAktstykker } from '../api/ft'
 import { SAG_TYPER } from '../types/ft'
 
-export function useSagerTotal() {
+export function useSagerTotal(periodeid?: number) {
   return useQuery({
-    queryKey: ['statistik', 'sager-total'],
-    queryFn: () => fetchSagerCount(),
+    queryKey: ['statistik', 'sager-total', periodeid],
+    queryFn: () => fetchSagerCount(periodeid ? `periodeid eq ${periodeid}` : undefined),
   })
 }
 

@@ -1,4 +1,4 @@
-import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord, Periode } from '../types/ft'
+import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord, Periode, SagDokument } from '../types/ft'
 
 const BASE_URL = 'https://oda.ft.dk/api'
 
@@ -196,6 +196,33 @@ export async function fetchAktstykker(periodeid: number): Promise<ODataResponse<
     $filter: `substringof('Aktstk',nummerprefix) and periodeid eq ${periodeid}`,
     $orderby: 'nummernumerisk desc',
     $top: 300,
+    $expand: 'SagDokument',
   })
   return fetchApi<ODataResponse<Sag>>(url)
+}
+
+/** Hent PDF-URL for et aktstykke via SagDokument → Dokument → Fil */
+export async function fetchAktstykkePdfUrl(sagId: number, sagDokumenter?: SagDokument[]): Promise<string | null> {
+  try {
+    // Brug medfølgende SagDokument eller hent dem
+    let docs = sagDokumenter
+    if (!docs || docs.length === 0) {
+      const sag = await fetchSag(sagId)
+      docs = sag.SagDokument
+    }
+    if (!docs || docs.length === 0) return null
+
+    // Hent første dokument med filer
+    for (const sd of docs) {
+      const dok = await fetchDokument(sd.dokumentid)
+      if (dok.Fil && dok.Fil.length > 0) {
+        // Foretruk PDF-filer
+        const pdf = dok.Fil.find(f => f.format?.toLowerCase() === 'pdf') || dok.Fil[0]
+        return pdf.filurl
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
 }

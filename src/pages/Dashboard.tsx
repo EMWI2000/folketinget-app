@@ -43,7 +43,7 @@ export default function Dashboard() {
 
   const sager = useSenesteSager(aktivPeriode ?? undefined)
   const afstemninger = useAfstemninger({ pageSize: 5 })
-  const sagerTotal = useSagerTotal()
+  const sagerTotal = useSagerTotal(aktivPeriode ?? undefined)
   const afstemningerTotal = useAfstemningerTotal()
 
   return (
@@ -51,7 +51,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h2>
-          <p className="text-gray-500 text-sm">Seneste aktivitet i Folketinget</p>
+          <p className="text-gray-500 text-sm">Overblik over seneste aktivitet i Folketinget for den valgte samling</p>
         </div>
         <PeriodeSelect
           perioder={perioder.data}
@@ -64,7 +64,7 @@ export default function Dashboard() {
       {/* Stat-kort */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <StatKort
-          label="Sager i alt"
+          label="Sager i samlingen"
           value={sagerTotal.data}
           loading={sagerTotal.isLoading}
           color="red"
@@ -75,7 +75,7 @@ export default function Dashboard() {
           }
         />
         <StatKort
-          label="Afstemninger"
+          label="Afstemninger (alle)"
           value={afstemningerTotal.data}
           loading={afstemningerTotal.isLoading}
           color="blue"

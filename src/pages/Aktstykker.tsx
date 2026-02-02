@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { usePerioder, useAktstykker } from '../hooks/useAktstykker'
+import { usePerioder, useAktstykker, useAktstykkePdfUrls } from '../hooks/useAktstykker'
 import type { Sag } from '../types/ft'
 import StatKort from '../components/StatKort'
 import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
@@ -26,7 +26,7 @@ function getAfgørelsesBadge(kode: string | null) {
   }
 }
 
-function MinisteriumSektion({ ministerium, sager }: { ministerium: string; sager: Sag[] }) {
+function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: string; sager: Sag[]; pdfUrls: Record<number, string | null> }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -54,7 +54,7 @@ function MinisteriumSektion({ ministerium, sager }: { ministerium: string; sager
       {open && (
         <div className="border-t border-gray-100">
           {sager.map((sag) => {
-            const pdfUrl = aktstykkePdfUrl(sag)
+            const pdfUrl = pdfUrls[sag.id] || aktstykkePdfUrl(sag)
             return (
               <div
                 key={sag.id}
@@ -112,6 +112,7 @@ export default function Aktstykker() {
   const aktivPeriode = selectedPeriode ?? defaultPeriode
 
   const aktstykker = useAktstykker(aktivPeriode)
+  const pdfUrls = useAktstykkePdfUrls(aktstykker.data?.value)
 
   // Filtre
   const [search, setSearch] = useState('')
@@ -162,7 +163,16 @@ export default function Aktstykker() {
     <div>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Aktstykker</h2>
-        <p className="text-gray-500 text-sm">Finansudvalgets bevillinger grupperet efter ministerium</p>
+        <p className="text-gray-500 text-sm mb-3">Finansudvalgets bevillinger grupperet efter ministerium</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+          <p className="mb-2">
+            <strong>Hvad er aktstykker?</strong> Aktstykker er bevillingsanmodninger fra ministerierne til Folketingets Finansudvalg. Når et ministerium har brug for ekstra bevillinger eller vil omdisponere midler, fremsender de et aktstykke. Finansudvalget godkender (tiltræder) eller afviser dem.
+          </p>
+          <p className="mb-2">
+            <strong>Statuskoder:</strong> <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">TU</span> = Tiltrådt enstemmigt</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">TF</span> = Tiltrådt med flertal</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">IK</span> = Ikke tiltrådt</span>
+          </p>
+          <p className="text-amber-700">Beløb og bevillingsdetaljer fremgår af selve aktstykke-dokumentet (PDF). Klik på link-ikonet for at åbne dokumentet.</p>
+        </div>
       </div>
 
       {/* Filter-bar */}
@@ -195,6 +205,30 @@ export default function Aktstykker() {
           />
         </div>
       </div>
+
+      {/* Åbn alle PDF'er knap */}
+      {pdfUrls.data && Object.values(pdfUrls.data).some(Boolean) && (
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              // Åbn PDF'er for de filtrerede aktstykker (maks 10)
+              const filteredIds = grouped.flatMap(([, sager]) => sager.map(s => s.id))
+              const urls = filteredIds
+                .map(id => pdfUrls.data![id])
+                .filter((url): url is string => !!url)
+                .slice(0, 10)
+              urls.forEach(url => window.open(url, '_blank'))
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-ft-red text-white rounded-lg hover:bg-ft-red-dark transition-colors text-sm font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Åbn alle PDF'er (maks 10)
+          </button>
+          <span className="text-xs text-gray-400 ml-2">Åbner i nye faneblade</span>
+        </div>
+      )}
 
       {/* Stat-kort */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -258,7 +292,7 @@ export default function Aktstykker() {
             </div>
           ) : (
             grouped.map(([ministerium, sager]) => (
-              <MinisteriumSektion key={ministerium} ministerium={ministerium} sager={sager} />
+              <MinisteriumSektion key={ministerium} ministerium={ministerium} sager={sager} pdfUrls={pdfUrls.data ?? {}} />
             ))
           )}
         </div>

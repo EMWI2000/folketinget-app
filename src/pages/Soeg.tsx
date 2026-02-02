@@ -61,7 +61,7 @@ export default function Soeg() {
     <div>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Søg i sager</h2>
-        <p className="text-gray-500 text-sm">Søg og filtrer i alle folketingssager</p>
+        <p className="text-gray-500 text-sm">Søg i alle folketingssager — lovforslag, beslutningsforslag, forespørgsler, borgerforslag og mere</p>
       </div>
 
       <div className="space-y-4 mb-6">
