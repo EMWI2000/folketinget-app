@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useSager } from '../hooks/useSager'
 import SearchBar from '../components/SearchBar'
 import FilterPanel from '../components/FilterPanel'
@@ -8,9 +9,21 @@ import Pagination from '../components/Pagination'
 const PAGE_SIZE = 20
 
 export default function Soeg() {
-  const [search, setSearch] = useState('')
+  const [searchParams] = useSearchParams()
+  const initialQuery = searchParams.get('q') || ''
+
+  const [search, setSearch] = useState(initialQuery)
   const [typeid, setTypeid] = useState<number | null>(null)
   const [page, setPage] = useState(1)
+
+  // Opdater søgning hvis query-param ændres (f.eks. fra emneord-klik)
+  useEffect(() => {
+    const q = searchParams.get('q') || ''
+    if (q !== search) {
+      setSearch(q)
+      setPage(1)
+    }
+  }, [searchParams])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)

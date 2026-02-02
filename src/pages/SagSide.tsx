@@ -1,6 +1,9 @@
 import { useParams, Link } from 'react-router-dom'
-import { useSag } from '../hooks/useSager'
+import { useSag, useSagDokumenter, useSagAktører, useSagEmneord } from '../hooks/useSager'
 import { SAG_TYPER, SAG_STATUS } from '../types/ft'
+import DokumentListe from '../components/DokumentListe'
+import AktørListe from '../components/AktørListe'
+import EmneordTags from '../components/EmneordTags'
 
 function formatDato(dato: string): string {
   return new Date(dato).toLocaleDateString('da-DK', {
@@ -24,12 +27,21 @@ export default function SagSide() {
   const { id } = useParams<{ id: string }>()
   const { data: sag, isLoading, error } = useSag(id ? Number(id) : null)
 
+  // Hent relaterede data baseret på expand-data i sag
+  const dokumentIds = sag?.SagDokument?.map((sd) => sd.dokumentid) ?? []
+  const aktørRelationer = sag?.SagAktør?.map((sa) => ({ aktørid: sa.aktørid, rolleid: sa.rolleid })) ?? []
+  const emneordIds = sag?.EmneordSag?.map((es) => es.emneordid) ?? []
+
+  const { data: dokumenter } = useSagDokumenter(dokumentIds)
+  const { data: aktører } = useSagAktører(aktørRelationer)
+  const { data: emneord } = useSagEmneord(emneordIds)
+
   if (isLoading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-6 bg-gray-200 rounded w-1/4 mb-4" />
-        <div className="h-8 bg-gray-200 rounded w-3/4 mb-4" />
-        <div className="h-4 bg-gray-100 rounded w-full mb-2" />
+      <div className="animate-pulse space-y-4">
+        <div className="h-6 bg-gray-200 rounded w-1/4" />
+        <div className="h-8 bg-gray-200 rounded w-3/4" />
+        <div className="h-4 bg-gray-100 rounded w-full" />
         <div className="h-4 bg-gray-100 rounded w-2/3" />
       </div>
     )
@@ -50,17 +62,17 @@ export default function SagSide() {
 
   return (
     <div>
-      <Link
-        to={-1 as unknown as string}
-        onClick={(e) => { e.preventDefault(); window.history.back() }}
+      <button
+        onClick={() => window.history.back()}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-ft-red mb-4 transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         Tilbage
-      </Link>
+      </button>
 
+      {/* Hoved-info */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <div className="flex items-start gap-3 flex-wrap mb-4">
           <span className="text-sm font-mono font-semibold text-ft-red bg-ft-red/10 px-3 py-1 rounded">
@@ -112,8 +124,35 @@ export default function SagSide() {
               </p>
             </div>
           )}
+          {sag.lovnummer && (
+            <div>
+              <span className="text-gray-500">Lovnummer</span>
+              <p className="font-medium text-gray-900">{sag.lovnummer}</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Emneord */}
+      {emneord && emneord.length > 0 && (
+        <div className="mb-6">
+          <EmneordTags emneord={emneord} />
+        </div>
+      )}
+
+      {/* Aktører */}
+      {aktører && aktører.length > 0 && (
+        <div className="mb-6">
+          <AktørListe aktører={aktører} />
+        </div>
+      )}
+
+      {/* Dokumenter */}
+      {dokumenter && dokumenter.length > 0 && (
+        <div className="mb-6">
+          <DokumentListe dokumenter={dokumenter} />
+        </div>
+      )}
 
       {/* Sagstrin tidslinje */}
       {sagstrin.length > 0 && (

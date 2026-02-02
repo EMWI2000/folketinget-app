@@ -1,4 +1,4 @@
-import type { ODataResponse, Sag, Afstemning, Sagstrin } from '../types/ft'
+import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord } from '../types/ft'
 
 const BASE_URL = 'https://oda.ft.dk/api'
 
@@ -13,15 +13,6 @@ interface QueryParams {
 }
 
 function buildUrl(endpoint: string, params: QueryParams = {}): string {
-  const url = new URL(`${BASE_URL}/${endpoint}`)
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      // OData params must use %24 encoding for $
-      const encodedKey = key.replace('$', '%24')
-      url.searchParams.set(encodedKey, String(value))
-    }
-  }
-  // URLSearchParams encodes %24 as %2524, so we rebuild manually
   const paramStr = Object.entries(params)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k.replace('$', '%24')}=${encodeURIComponent(String(v))}`)
@@ -37,7 +28,8 @@ async function fetchApi<T>(url: string): Promise<T> {
   return res.json()
 }
 
-// Sager
+// ─── Sager ───────────────────────────────────────────────
+
 export async function fetchSager(opts: {
   top?: number
   skip?: number
@@ -63,13 +55,13 @@ export async function fetchSager(opts: {
 }
 
 export async function fetchSag(id: number): Promise<Sag> {
-  const url = buildUrl(`Sag(${id})`, {
-    $expand: 'Sagstrin',
-  })
+  // Byg URL manuelt for at undgå double-encoding af Aktør (ø = %C3%B8)
+  const url = `${BASE_URL}/Sag(${id})?%24expand=Sagstrin,SagDokument,SagAkt%C3%B8r,EmneordSag`
   return fetchApi<Sag>(url)
 }
 
-// Afstemninger
+// ─── Afstemninger ────────────────────────────────────────
+
 export async function fetchAfstemninger(opts: {
   top?: number
   skip?: number
@@ -82,7 +74,8 @@ export async function fetchAfstemninger(opts: {
   return fetchApi<ODataResponse<Afstemning>>(url)
 }
 
-// Sagstrin for en specifik sag
+// ─── Sagstrin ────────────────────────────────────────────
+
 export async function fetchSagstrin(sagId: number): Promise<ODataResponse<Sagstrin>> {
   const url = buildUrl('Sagstrin', {
     $filter: `sagid eq ${sagId}`,
@@ -91,7 +84,8 @@ export async function fetchSagstrin(sagId: number): Promise<ODataResponse<Sagstr
   return fetchApi<ODataResponse<Sagstrin>>(url)
 }
 
-// Seneste opdaterede sager (dashboard)
+// ─── Seneste (dashboard) ────────────────────────────────
+
 export async function fetchSenesteSager(top: number = 15): Promise<ODataResponse<Sag>> {
   const url = buildUrl('Sag', {
     $top: top,
@@ -99,4 +93,79 @@ export async function fetchSenesteSager(top: number = 15): Promise<ODataResponse
     $filter: "typeid eq 3 or typeid eq 5 or typeid eq 8 or typeid eq 20",
   })
   return fetchApi<ODataResponse<Sag>>(url)
+}
+
+// ─── Dokumenter med filer ────────────────────────────────
+
+export async function fetchDokument(dokumentId: number): Promise<Dokument> {
+  const url = buildUrl(`Dokument(${dokumentId})`, {
+    $expand: 'Fil',
+  })
+  return fetchApi<Dokument>(url)
+}
+
+export async function fetchDokumenter(dokumentIds: number[]): Promise<Dokument[]> {
+  const results = await Promise.all(
+    dokumentIds.map((id) => fetchDokument(id).catch(() => null))
+  )
+  return results.filter((d): d is Dokument => d !== null)
+}
+
+// ─── Aktører ─────────────────────────────────────────────
+
+export async function fetchAktør(aktørId: number): Promise<Aktør> {
+  const url = buildUrl(`Akt%C3%B8r(${aktørId})`)
+  return fetchApi<Aktør>(url)
+}
+
+export async function fetchAktører(aktørIds: number[]): Promise<Aktør[]> {
+  const unique = [...new Set(aktørIds)]
+  const results = await Promise.all(
+    unique.map((id) => fetchAktør(id).catch(() => null))
+  )
+  return results.filter((a): a is Aktør => a !== null)
+}
+
+// ─── Emneord ─────────────────────────────────────────────
+
+export async function fetchEmneord(emneordId: number): Promise<Emneord> {
+  const url = buildUrl(`Emneord(${emneordId})`)
+  return fetchApi<Emneord>(url)
+}
+
+export async function fetchEmneordBatch(emneordIds: number[]): Promise<Emneord[]> {
+  const unique = [...new Set(emneordIds)]
+  const results = await Promise.all(
+    unique.map((id) => fetchEmneord(id).catch(() => null))
+  )
+  return results.filter((e): e is Emneord => e !== null)
+}
+
+export async function fetchAlleEmneordSager(top: number = 500): Promise<ODataResponse<{ id: number; emneordid: number; sagid: number; opdateringsdato: string }>> {
+  const url = buildUrl('EmneordSag', {
+    $top: top,
+    $orderby: 'opdateringsdato desc',
+  })
+  return fetchApi(url)
+}
+
+// ─── Statistik ───────────────────────────────────────────
+
+export async function fetchSagerCount(filter?: string): Promise<number> {
+  const url = buildUrl('Sag', {
+    $top: 0,
+    $filter: filter,
+    $inlinecount: 'allpages',
+  })
+  const res = await fetchApi<ODataResponse<Sag>>(url)
+  return parseInt(res['odata.count'] ?? '0', 10)
+}
+
+export async function fetchAfstemningerCount(): Promise<number> {
+  const url = buildUrl('Afstemning', {
+    $top: 0,
+    $inlinecount: 'allpages',
+  })
+  const res = await fetchApi<ODataResponse<Afstemning>>(url)
+  return parseInt(res['odata.count'] ?? '0', 10)
 }

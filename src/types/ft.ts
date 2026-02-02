@@ -26,6 +26,9 @@ export interface Sag {
   deltundersagid: number | null
   superid: number | null
   Sagstrin?: Sagstrin[]
+  SagDokument?: SagDokument[]
+  SagAktør?: SagAktørRelation[]
+  EmneordSag?: EmneordSagRelation[]
 }
 
 export interface Sagstrin {
@@ -67,6 +70,67 @@ export interface Aktør {
   slutdato: string | null
 }
 
+export interface SagDokument {
+  id: number
+  sagid: number
+  dokumentid: number
+  bilagsnummer: string
+  frigivelsesdato: string
+  opdateringsdato: string
+  rolleid: number
+}
+
+export interface SagAktørRelation {
+  id: number
+  aktørid: number
+  sagid: number
+  opdateringsdato: string
+  rolleid: number
+}
+
+export interface EmneordSagRelation {
+  id: number
+  emneordid: number
+  sagid: number
+  opdateringsdato: string
+}
+
+export interface Dokument {
+  id: number
+  typeid: number
+  kategoriid: number
+  statusid: number
+  offentlighedskode: string
+  titel: string
+  dato: string
+  modtagelsesdato: string | null
+  frigivelsesdato: string | null
+  opdateringsdato: string
+  Fil?: Fil[]
+}
+
+export interface Fil {
+  id: number
+  dokumentid: number
+  titel: string
+  versionsdato: string
+  filurl: string
+  opdateringsdato: string
+  variantkode: string
+  format: string
+}
+
+export interface Emneord {
+  id: number
+  typeid: number
+  emneord: string
+  opdateringsdato: string
+}
+
+export interface AktørMedRolle extends Aktør {
+  rolleid: number
+}
+
 export interface ODataResponse<T> {
   'odata.metadata': string
   'odata.count'?: string
@@ -95,4 +159,12 @@ export const SAG_STATUS: Record<number, string> = {
   28: 'Forkastet',
   48: 'Afsluttet',
   54: 'Modtaget',
+}
+
+export const AKTØR_ROLLER: Record<number, string> = {
+  6: 'Forslagsstiller',
+  9: 'Rådgiver',
+  11: 'Ordfører',
+  14: 'Minister',
+  16: 'Medunderskriver',
 }

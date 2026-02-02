@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Soeg from './pages/Soeg'
 import SagSide from './pages/SagSide'
+import Statistik from './pages/Statistik'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/soeg" element={<Soeg />} />
             <Route path="/sag/:id" element={<SagSide />} />
+            <Route path="/statistik" element={<Statistik />} />
           </Routes>
         </Layout>
       </BrowserRouter>

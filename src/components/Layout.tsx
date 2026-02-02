@@ -6,6 +6,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { to: '/', label: 'Dashboard' },
     { to: '/soeg', label: 'Søg i sager' },
+    { to: '/statistik', label: 'Statistik' },
   ]
 
   return (
