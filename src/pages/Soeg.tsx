@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSager } from '../hooks/useSager'
+import { usePerioder } from '../hooks/useAktstykker'
 import SearchBar from '../components/SearchBar'
 import FilterPanel from '../components/FilterPanel'
 import SagKort from '../components/SagKort'
 import Pagination from '../components/Pagination'
+import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
 
 const PAGE_SIZE = 20
 
@@ -15,6 +17,11 @@ export default function Soeg() {
   const [search, setSearch] = useState(initialQuery)
   const [typeid, setTypeid] = useState<number | null>(null)
   const [page, setPage] = useState(1)
+
+  const perioder = usePerioder()
+  const defaultPeriode = useDefaultPeriode(perioder.data)
+  const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
+  const aktivPeriode = selectedPeriode ?? defaultPeriode
 
   // Opdater søgning hvis query-param ændres (f.eks. fra emneord-klik)
   useEffect(() => {
@@ -35,9 +42,15 @@ export default function Soeg() {
     setPage(1)
   }, [])
 
+  const handlePeriodeChange = useCallback((periodeid: number | null) => {
+    setSelectedPeriode(periodeid)
+    setPage(1)
+  }, [])
+
   const { data, isLoading, error } = useSager({
     search,
     typeid: typeid ?? undefined,
+    periodeid: aktivPeriode ?? undefined,
     page,
     pageSize: PAGE_SIZE,
   })
@@ -53,7 +66,15 @@ export default function Soeg() {
 
       <div className="space-y-4 mb-6">
         <SearchBar value={search} onChange={handleSearchChange} />
-        <FilterPanel selectedType={typeid} onTypeChange={handleTypeChange} />
+        <div className="flex flex-wrap gap-3 items-center">
+          <FilterPanel selectedType={typeid} onTypeChange={handleTypeChange} />
+          <PeriodeSelect
+            perioder={perioder.data}
+            value={aktivPeriode}
+            onChange={handlePeriodeChange}
+            showAll
+          />
+        </div>
       </div>
 
       {totalCount !== undefined && (

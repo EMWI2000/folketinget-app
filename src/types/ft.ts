@@ -167,12 +167,20 @@ export const SAG_STATUS: Record<number, string> = {
 
 export interface Periode {
   id: number
-  typeid: number
+  type: string  // "samling" eller "finans"
   kode: string
   titel: string
   startdato: string
   slutdato: string
   opdateringsdato: string
+}
+
+/** Lav en menneskevenlig label for en periode, f.eks. "Samling 2025-26 (okt 2025 – okt 2026)" */
+export function periodeLabel(p: Periode): string {
+  const start = new Date(p.startdato)
+  const slut = new Date(p.slutdato)
+  const fmt = (d: Date) => d.toLocaleDateString('da-DK', { month: 'short', year: 'numeric' })
+  return `${p.titel} (${fmt(start)} – ${fmt(slut)})`
 }
 
 // Sag har også disse felter for aktstykker

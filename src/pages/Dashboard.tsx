@@ -1,10 +1,13 @@
+import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useSenesteSager } from '../hooks/useSeneste'
 import { useAfstemninger } from '../hooks/useAfstemninger'
 import { useSagerTotal, useAfstemningerTotal } from '../hooks/useStatistik'
+import { usePerioder } from '../hooks/useAktstykker'
 import SagKort from '../components/SagKort'
 import AfstemningKort from '../components/AfstemningKort'
 import StatKort from '../components/StatKort'
+import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
 
 function LoadingSkeleton() {
   return (
@@ -29,16 +32,33 @@ function ErrorBox({ message }: { message: string }) {
 }
 
 export default function Dashboard() {
-  const sager = useSenesteSager()
+  const perioder = usePerioder()
+  const defaultPeriode = useDefaultPeriode(perioder.data)
+  const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
+  const aktivPeriode = selectedPeriode ?? defaultPeriode
+
+  const handlePeriodeChange = useCallback((periodeid: number | null) => {
+    setSelectedPeriode(periodeid)
+  }, [])
+
+  const sager = useSenesteSager(aktivPeriode ?? undefined)
   const afstemninger = useAfstemninger({ pageSize: 5 })
   const sagerTotal = useSagerTotal()
   const afstemningerTotal = useAfstemningerTotal()
 
   return (
     <div>
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h2>
-        <p className="text-gray-500 text-sm">Seneste aktivitet i Folketinget</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h2>
+          <p className="text-gray-500 text-sm">Seneste aktivitet i Folketinget</p>
+        </div>
+        <PeriodeSelect
+          perioder={perioder.data}
+          value={aktivPeriode}
+          onChange={handlePeriodeChange}
+          showAll
+        />
       </div>
 
       {/* Stat-kort */}

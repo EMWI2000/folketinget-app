@@ -5,17 +5,19 @@ import type { AktørMedRolle } from '../types/ft'
 export function useSager(opts: {
   search?: string
   typeid?: number
+  periodeid?: number
   page?: number
   pageSize?: number
 }) {
   const skip = ((opts.page ?? 1) - 1) * (opts.pageSize ?? 20)
   return useQuery({
-    queryKey: ['sager', opts.search, opts.typeid, opts.page, opts.pageSize],
+    queryKey: ['sager', opts.search, opts.typeid, opts.periodeid, opts.page, opts.pageSize],
     queryFn: () => fetchSager({
       top: opts.pageSize ?? 20,
       skip,
       search: opts.search || undefined,
       typeid: opts.typeid || undefined,
+      periodeid: opts.periodeid || undefined,
     }),
     placeholderData: (prev) => prev,
   })

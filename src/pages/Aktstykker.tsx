@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { usePerioder, useAktstykker } from '../hooks/useAktstykker'
-import type { Sag, Periode } from '../types/ft'
+import type { Sag } from '../types/ft'
 import StatKort from '../components/StatKort'
+import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
 
 function formatDato(dato: string): string {
   return new Date(dato).toLocaleDateString('da-DK', {
@@ -52,45 +53,63 @@ function MinisteriumSektion({ ministerium, sager }: { ministerium: string; sager
       </button>
       {open && (
         <div className="border-t border-gray-100">
-          {sager.map((sag) => (
-            <Link
-              key={sag.id}
-              to={`/sag/${sag.id}`}
-              className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 group"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono font-semibold text-ft-red">{sag.nummer}</span>
-                  {getAfgørelsesBadge(sag.afgørelsesresultatkode)}
+          {sager.map((sag) => {
+            const pdfUrl = aktstykkePdfUrl(sag)
+            return (
+              <div
+                key={sag.id}
+                className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 group"
+              >
+                <Link to={`/sag/${sag.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono font-semibold text-ft-red">{sag.nummer}</span>
+                    {getAfgørelsesBadge(sag.afgørelsesresultatkode)}
+                  </div>
+                  <p className="text-sm text-gray-700 group-hover:text-ft-red transition-colors truncate">
+                    {sag.titelkort || sag.titel}
+                  </p>
+                </Link>
+                <div className="flex items-center gap-3 shrink-0 ml-3">
+                  {pdfUrl && (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-gray-400 hover:text-ft-red transition-colors"
+                      title="Se aktstykke på ft.dk"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {formatDato(sag.opdateringsdato)}
+                  </span>
                 </div>
-                <p className="text-sm text-gray-700 group-hover:text-ft-red transition-colors truncate">
-                  {sag.titelkort || sag.titel}
-                </p>
               </div>
-              <span className="text-xs text-gray-400 shrink-0 ml-3">
-                {formatDato(sag.opdateringsdato)}
-              </span>
-            </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
+function aktstykkePdfUrl(sag: Sag): string | null {
+  // Aktstykke PDF'er ligger typisk på ft.dk med fast URL-mønster
+  // f.eks. https://www.ft.dk/samling/20251/aktstykke/aktstk99/index.htm
+  if (!sag.nummerprefix || !sag.nummernumerisk || !sag.periodeid) return null
+  return `https://www.ft.dk/samling/${sag.periodeid}/aktstykke/${sag.nummerprefix.toLowerCase()}${sag.nummernumerisk}/index.htm`
+}
+
 export default function Aktstykker() {
   const perioder = usePerioder()
-
-  // Find samlinger (ikke finansår) og default til nyeste
-  const samlinger = useMemo(() => {
-    if (!perioder.data) return []
-    return perioder.data.filter((p: Periode) =>
-      p.titel.includes('-') // Samlinger har format "2025-26"
-    )
-  }, [perioder.data])
+  const defaultPeriode = useDefaultPeriode(perioder.data)
 
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
-  const aktivPeriode = selectedPeriode ?? samlinger[0]?.id ?? null
+  const aktivPeriode = selectedPeriode ?? defaultPeriode
 
   const aktstykker = useAktstykker(aktivPeriode)
 
@@ -148,15 +167,11 @@ export default function Aktstykker() {
 
       {/* Filter-bar */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <select
-          value={aktivPeriode ?? ''}
-          onChange={(e) => setSelectedPeriode(Number(e.target.value))}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
-        >
-          {samlinger.map((p) => (
-            <option key={p.id} value={p.id}>{p.titel}</option>
-          ))}
-        </select>
+        <PeriodeSelect
+          perioder={perioder.data}
+          value={aktivPeriode}
+          onChange={setSelectedPeriode}
+        />
         <select
           value={selectedMinisterium ?? ''}
           onChange={(e) => setSelectedMinisterium(e.target.value || null)}

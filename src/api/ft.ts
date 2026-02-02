@@ -35,6 +35,7 @@ export async function fetchSager(opts: {
   skip?: number
   search?: string
   typeid?: number
+  periodeid?: number
   orderby?: string
 } = {}): Promise<ODataResponse<Sag>> {
   const filters: string[] = []
@@ -43,6 +44,9 @@ export async function fetchSager(opts: {
   }
   if (opts.typeid) {
     filters.push(`typeid eq ${opts.typeid}`)
+  }
+  if (opts.periodeid) {
+    filters.push(`periodeid eq ${opts.periodeid}`)
   }
   const url = buildUrl('Sag', {
     $top: opts.top ?? 20,
@@ -86,11 +90,15 @@ export async function fetchSagstrin(sagId: number): Promise<ODataResponse<Sagstr
 
 // ─── Seneste (dashboard) ────────────────────────────────
 
-export async function fetchSenesteSager(top: number = 15): Promise<ODataResponse<Sag>> {
+export async function fetchSenesteSager(top: number = 15, periodeid?: number): Promise<ODataResponse<Sag>> {
+  const baseFilter = "typeid eq 3 or typeid eq 5 or typeid eq 8 or typeid eq 20"
+  const filter = periodeid
+    ? `(${baseFilter}) and periodeid eq ${periodeid}`
+    : baseFilter
   const url = buildUrl('Sag', {
     $top: top,
     $orderby: 'opdateringsdato desc',
-    $filter: "typeid eq 3 or typeid eq 5 or typeid eq 8 or typeid eq 20",
+    $filter: filter,
   })
   return fetchApi<ODataResponse<Sag>>(url)
 }

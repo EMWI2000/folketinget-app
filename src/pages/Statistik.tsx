@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useAktstykkerPerMinisterium } from '../hooks/useStatistik'
 import { usePerioder } from '../hooks/useAktstykker'
-import type { Periode } from '../types/ft'
+import { periodeLabel } from '../types/ft'
 import StatKort from '../components/StatKort'
 import BarChart from '../components/BarChart'
+import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
 
 const COLORS = [
   '#a1172f', '#2563eb', '#059669', '#d97706', '#7c3aed',
@@ -13,15 +14,13 @@ const COLORS = [
 
 export default function Statistik() {
   const perioder = usePerioder()
-
-  const samlinger = useMemo(() => {
-    if (!perioder.data) return []
-    return perioder.data.filter((p: Periode) => p.titel.includes('-'))
-  }, [perioder.data])
+  const defaultPeriode = useDefaultPeriode(perioder.data)
 
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
-  const aktivPeriode = selectedPeriode ?? samlinger[0]?.id ?? null
-  const aktivTitel = samlinger.find((p) => p.id === aktivPeriode)?.titel ?? ''
+  const aktivPeriode = selectedPeriode ?? defaultPeriode
+  const aktivLabel = perioder.data?.find((p) => p.id === aktivPeriode)
+    ? periodeLabel(perioder.data.find((p) => p.id === aktivPeriode)!)
+    : ''
 
   const sagerTotal = useSagerTotal()
   const afstemningerTotal = useAfstemningerTotal()
@@ -35,15 +34,11 @@ export default function Statistik() {
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Statistik</h2>
           <p className="text-gray-500 text-sm">Overblik over data i Folketingets åbne data</p>
         </div>
-        <select
-          value={aktivPeriode ?? ''}
-          onChange={(e) => setSelectedPeriode(Number(e.target.value))}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
-        >
-          {samlinger.map((p) => (
-            <option key={p.id} value={p.id}>{p.titel}</option>
-          ))}
-        </select>
+        <PeriodeSelect
+          perioder={perioder.data}
+          value={aktivPeriode}
+          onChange={setSelectedPeriode}
+        />
       </div>
 
       {/* Stat-kort */}
@@ -87,7 +82,7 @@ export default function Statistik() {
       {sagerPerType.data && (
         <div className="mb-8">
           <BarChart
-            title={`Sager fordelt efter type (${aktivTitel})`}
+            title={`Sager fordelt efter type (${aktivLabel})`}
             data={sagerPerType.data.map((d, i) => ({
               label: d.label,
               value: d.count,
@@ -111,7 +106,7 @@ export default function Statistik() {
       {aktstykkerPerMinisterium.data && aktstykkerPerMinisterium.data.length > 0 && (
         <div className="mb-8">
           <BarChart
-            title={`Aktstykker per ministerium (${aktivTitel})`}
+            title={`Aktstykker per ministerium (${aktivLabel})`}
             data={aktstykkerPerMinisterium.data.map((d, i) => ({
               label: d.label.replace('ministeriet', 'min.').replace('Ministeriet', 'Min.'),
               value: d.count,
