@@ -1,4 +1,4 @@
-import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord } from '../types/ft'
+import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord, Periode } from '../types/ft'
 
 const BASE_URL = 'https://oda.ft.dk/api'
 
@@ -168,4 +168,26 @@ export async function fetchAfstemningerCount(): Promise<number> {
   })
   const res = await fetchApi<ODataResponse<Afstemning>>(url)
   return parseInt(res['odata.count'] ?? '0', 10)
+}
+
+// ─── Perioder ────────────────────────────────────────────
+
+export async function fetchPerioder(): Promise<Periode[]> {
+  const url = buildUrl('Periode', {
+    $top: 20,
+    $orderby: 'id desc',
+  })
+  const res = await fetchApi<ODataResponse<Periode>>(url)
+  return res.value
+}
+
+// ─── Aktstykker ──────────────────────────────────────────
+
+export async function fetchAktstykker(periodeid: number): Promise<ODataResponse<Sag>> {
+  const url = buildUrl('Sag', {
+    $filter: `substringof('Aktstk',nummerprefix) and periodeid eq ${periodeid}`,
+    $orderby: 'nummernumerisk desc',
+    $top: 300,
+  })
+  return fetchApi<ODataResponse<Sag>>(url)
 }

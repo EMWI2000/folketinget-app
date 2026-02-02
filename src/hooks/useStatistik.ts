@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchSagerCount, fetchAfstemningerCount, fetchAlleEmneordSager, fetchEmneordBatch } from '../api/ft'
+import { fetchSagerCount, fetchAfstemningerCount, fetchAktstykker } from '../api/ft'
 import { SAG_TYPER } from '../types/ft'
 
 export function useSagerTotal() {
@@ -16,15 +16,18 @@ export function useAfstemningerTotal() {
   })
 }
 
-export function useSagerPerType() {
+export function useSagerPerType(periodeid?: number) {
   const typeIds = Object.keys(SAG_TYPER).map(Number)
 
   return useQuery({
-    queryKey: ['statistik', 'sager-per-type'],
+    queryKey: ['statistik', 'sager-per-type', periodeid],
     queryFn: async () => {
       const counts = await Promise.all(
         typeIds.map(async (typeid) => {
-          const count = await fetchSagerCount(`typeid eq ${typeid}`)
+          const filter = periodeid
+            ? `typeid eq ${typeid} and periodeid eq ${periodeid}`
+            : `typeid eq ${typeid}`
+          const count = await fetchSagerCount(filter)
           return { typeid, label: SAG_TYPER[typeid], count }
         })
       )
@@ -33,29 +36,20 @@ export function useSagerPerType() {
   })
 }
 
-export function useTopEmneord() {
+export function useAktstykkerPerMinisterium(periodeid: number | null) {
   return useQuery({
-    queryKey: ['statistik', 'top-emneord'],
+    queryKey: ['statistik', 'aktstykker-per-ministerium', periodeid],
     queryFn: async () => {
-      const res = await fetchAlleEmneordSager(500)
-      // Tæl forekomster af hvert emneord
-      const counts = new Map<number, number>()
-      for (const es of res.value) {
-        counts.set(es.emneordid, (counts.get(es.emneordid) || 0) + 1)
+      const res = await fetchAktstykker(periodeid!)
+      const counts = new Map<string, number>()
+      for (const sag of res.value) {
+        const ministerium = sag.paragraf || 'Ukendt'
+        counts.set(ministerium, (counts.get(ministerium) || 0) + 1)
       }
-      // Sortér og tag top 30
-      const top = [...counts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30)
-
-      // Hent emneord-tekster
-      const emneordIds = top.map(([id]) => id)
-      const emneordData = await fetchEmneordBatch(emneordIds)
-
-      return top.map(([id, count]) => {
-        const e = emneordData.find((em) => em.id === id)
-        return { id, emneord: e?.emneord ?? `#${id}`, count }
-      }).filter((e) => e.emneord.length > 2) // Filtrer tomme/korte
+      return [...counts.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
     },
+    enabled: periodeid !== null,
   })
 }

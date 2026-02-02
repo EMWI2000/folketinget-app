@@ -1,26 +1,49 @@
-import { useNavigate } from 'react-router-dom'
-import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useTopEmneord } from '../hooks/useStatistik'
+import { useState, useMemo } from 'react'
+import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useAktstykkerPerMinisterium } from '../hooks/useStatistik'
+import { usePerioder } from '../hooks/useAktstykker'
+import type { Periode } from '../types/ft'
 import StatKort from '../components/StatKort'
 import BarChart from '../components/BarChart'
 
 const COLORS = [
   '#a1172f', '#2563eb', '#059669', '#d97706', '#7c3aed',
   '#dc2626', '#0891b2', '#4f46e5', '#ca8a04', '#be185d',
-  '#16a34a',
+  '#16a34a', '#6366f1', '#0d9488', '#ea580c', '#8b5cf6',
 ]
 
 export default function Statistik() {
-  const navigate = useNavigate()
+  const perioder = usePerioder()
+
+  const samlinger = useMemo(() => {
+    if (!perioder.data) return []
+    return perioder.data.filter((p: Periode) => p.titel.includes('-'))
+  }, [perioder.data])
+
+  const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
+  const aktivPeriode = selectedPeriode ?? samlinger[0]?.id ?? null
+  const aktivTitel = samlinger.find((p) => p.id === aktivPeriode)?.titel ?? ''
+
   const sagerTotal = useSagerTotal()
   const afstemningerTotal = useAfstemningerTotal()
-  const sagerPerType = useSagerPerType()
-  const topEmneord = useTopEmneord()
+  const sagerPerType = useSagerPerType(aktivPeriode ?? undefined)
+  const aktstykkerPerMinisterium = useAktstykkerPerMinisterium(aktivPeriode)
 
   return (
     <div>
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Statistik</h2>
-        <p className="text-gray-500 text-sm">Overblik over data i Folketingets åbne data</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">Statistik</h2>
+          <p className="text-gray-500 text-sm">Overblik over data i Folketingets åbne data</p>
+        </div>
+        <select
+          value={aktivPeriode ?? ''}
+          onChange={(e) => setSelectedPeriode(Number(e.target.value))}
+          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
+        >
+          {samlinger.map((p) => (
+            <option key={p.id} value={p.id}>{p.titel}</option>
+          ))}
+        </select>
       </div>
 
       {/* Stat-kort */}
@@ -64,7 +87,7 @@ export default function Statistik() {
       {sagerPerType.data && (
         <div className="mb-8">
           <BarChart
-            title="Sager fordelt efter type"
+            title={`Sager fordelt efter type (${aktivTitel})`}
             data={sagerPerType.data.map((d, i) => ({
               label: d.label,
               value: d.count,
@@ -84,38 +107,25 @@ export default function Statistik() {
         </div>
       )}
 
-      {/* Top emneord */}
-      {topEmneord.data && topEmneord.data.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top emneord (seneste sager)</h3>
-          <div className="flex flex-wrap gap-2">
-            {topEmneord.data.map((e) => {
-              const maxCount = topEmneord.data![0].count
-              const minSize = 0.75
-              const maxSize = 1.5
-              const size = minSize + ((e.count / maxCount) * (maxSize - minSize))
-              const opacity = 0.5 + (e.count / maxCount) * 0.5
-              return (
-                <button
-                  key={e.id}
-                  onClick={() => navigate(`/soeg?q=${encodeURIComponent(e.emneord)}`)}
-                  className="px-3 py-1 rounded-full bg-ft-red/10 text-ft-red hover:bg-ft-red/20 transition-colors cursor-pointer font-medium"
-                  style={{ fontSize: `${size}rem`, opacity }}
-                  title={`${e.count} sager`}
-                >
-                  {e.emneord}
-                </button>
-              )
-            })}
-          </div>
+      {/* Bar chart: Aktstykker per ministerium */}
+      {aktstykkerPerMinisterium.data && aktstykkerPerMinisterium.data.length > 0 && (
+        <div className="mb-8">
+          <BarChart
+            title={`Aktstykker per ministerium (${aktivTitel})`}
+            data={aktstykkerPerMinisterium.data.map((d, i) => ({
+              label: d.label.replace('ministeriet', 'min.').replace('Ministeriet', 'Min.'),
+              value: d.count,
+              color: COLORS[i % COLORS.length],
+            }))}
+          />
         </div>
       )}
-      {topEmneord.isLoading && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4" />
-          <div className="flex flex-wrap gap-2">
-            {[...Array(15)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 rounded-full" style={{ width: `${60 + Math.random() * 80}px` }} />
+      {aktstykkerPerMinisterium.isLoading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
+          <div className="space-y-3">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-8 bg-gray-100 rounded" />
             ))}
           </div>
         </div>

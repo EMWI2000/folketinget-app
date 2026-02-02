@@ -22,6 +22,10 @@ export interface Sag {
   lovnummer: string | null
   lovnummerdato: string | null
   retsinformationsurl: string | null
+  paragraf: string | null
+  paragrafnummer: number | null
+  afgørelsesdato: string | null
+  afgørelse: string | null
   fremsatunder: string | null
   deltundersagid: number | null
   superid: number | null
@@ -159,6 +163,25 @@ export const SAG_STATUS: Record<number, string> = {
   28: 'Forkastet',
   48: 'Afsluttet',
   54: 'Modtaget',
+}
+
+export interface Periode {
+  id: number
+  typeid: number
+  kode: string
+  titel: string
+  startdato: string
+  slutdato: string
+  opdateringsdato: string
+}
+
+// Sag har også disse felter for aktstykker
+export interface SagMedParagraf extends Sag {
+  paragraf: string | null
+  paragrafnummer: number | null
+  afgørelsesresultatkode: string | null
+  afgørelsesdato: string | null
+  afgørelse: string | null
 }
 
 export const AKTØR_ROLLER: Record<number, string> = {
