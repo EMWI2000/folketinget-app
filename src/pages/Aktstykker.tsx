@@ -4,6 +4,10 @@ import { usePerioder, useAktstykker, useAktstykkePdfUrls } from '../hooks/useAkt
 import type { Sag } from '../types/ft'
 import StatKort from '../components/StatKort'
 import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import AktsTidslinje from '../components/AktsTidslinje'
+import AiSammenfatning from '../components/AiSammenfatning'
+import CopyButton from '../components/CopyButton'
+import { aktstykkerToCsv, downloadCsv } from '../lib/csv'
 
 function formatDato(dato: string): string {
   return new Date(dato).toLocaleDateString('da-DK', {
@@ -30,18 +34,18 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
   const [open, setOpen] = useState(true)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-ft-red/10 rounded-lg flex items-center justify-center text-ft-red text-sm font-bold">
             §
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{ministerium}</h3>
-            <p className="text-xs text-gray-500">{sager.length} aktstykke{sager.length !== 1 ? 'r' : ''}</p>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{ministerium}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{sager.length} aktstykke{sager.length !== 1 ? 'r' : ''}</p>
           </div>
         </div>
         <svg
@@ -52,20 +56,21 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
         </svg>
       </button>
       {open && (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-gray-100 dark:border-gray-700">
           {sager.map((sag) => {
             const pdfUrl = pdfUrls[sag.id] || aktstykkePdfUrl(sag)
             return (
               <div
                 key={sag.id}
-                className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 group"
+                className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700 last:border-b-0 group"
               >
                 <Link to={`/sag/${sag.id}`} className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-mono font-semibold text-ft-red">{sag.nummer}</span>
+                    <CopyButton text={sag.nummer || sag.nummerprefix} label="sagsnummer" />
                     {getAfgørelsesBadge(sag.afgørelsesresultatkode)}
                   </div>
-                  <p className="text-sm text-gray-700 group-hover:text-ft-red transition-colors truncate">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-ft-red transition-colors truncate">
                     {sag.titelkort || sag.titel}
                   </p>
                 </Link>
@@ -77,14 +82,14 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="text-gray-400 hover:text-ft-red transition-colors"
-                      title="Se aktstykke på ft.dk"
+                      title="Se aktstykke (PDF)"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </a>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
                     {formatDato(sag.opdateringsdato)}
                   </span>
                 </div>
@@ -98,8 +103,6 @@ function MinisteriumSektion({ ministerium, sager, pdfUrls }: { ministerium: stri
 }
 
 function aktstykkePdfUrl(sag: Sag): string | null {
-  // Aktstykke PDF'er ligger typisk på ft.dk med fast URL-mønster
-  // f.eks. https://www.ft.dk/samling/20251/aktstykke/aktstk99/index.htm
   if (!sag.nummerprefix || !sag.nummernumerisk || !sag.periodeid) return null
   return `https://www.ft.dk/samling/${sag.periodeid}/aktstykke/${sag.nummerprefix.toLowerCase()}${sag.nummernumerisk}/index.htm`
 }
@@ -117,9 +120,10 @@ export default function Aktstykker() {
   // Filtre
   const [search, setSearch] = useState('')
   const [selectedMinisterium, setSelectedMinisterium] = useState<string | null>(null)
+  const [showAiPanel, setShowAiPanel] = useState(false)
 
   // Gruppér og filtrer
-  const { grouped, ministerier, stats } = useMemo(() => {
+  const { grouped, ministerier, stats, allFiltered } = useMemo(() => {
     const sager = aktstykker.data?.value ?? []
 
     // Filtrer
@@ -150,6 +154,7 @@ export default function Aktstykker() {
     return {
       grouped: sorted,
       ministerier: allMinisterier,
+      allFiltered: filtered,
       stats: {
         total: sager.length,
         godkendte,
@@ -162,16 +167,16 @@ export default function Aktstykker() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Aktstykker</h2>
-        <p className="text-gray-500 text-sm mb-3">Finansudvalgets bevillinger grupperet efter ministerium</p>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Aktstykker</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">Finansudvalgets bevillinger grupperet efter ministerium</p>
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-900 dark:text-amber-200">
           <p className="mb-2">
             <strong>Hvad er aktstykker?</strong> Aktstykker er bevillingsanmodninger fra ministerierne til Folketingets Finansudvalg. Når et ministerium har brug for ekstra bevillinger eller vil omdisponere midler, fremsender de et aktstykke. Finansudvalget godkender (tiltræder) eller afviser dem.
           </p>
           <p className="mb-2">
             <strong>Statuskoder:</strong> <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">TU</span> = Tiltrådt enstemmigt</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">TF</span> = Tiltrådt med flertal</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">IK</span> = Ikke tiltrådt</span>
           </p>
-          <p className="text-amber-700">Beløb og bevillingsdetaljer fremgår af selve aktstykke-dokumentet (PDF). Klik på link-ikonet for at åbne dokumentet.</p>
+          <p className="text-amber-700 dark:text-amber-300">Beløb og bevillingsdetaljer fremgår af selve aktstykke-dokumentet (PDF). Klik på link-ikonet for at åbne dokumentet.</p>
         </div>
       </div>
 
@@ -185,7 +190,7 @@ export default function Aktstykker() {
         <select
           value={selectedMinisterium ?? ''}
           onChange={(e) => setSelectedMinisterium(e.target.value || null)}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
+          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
         >
           <option value="">Alle ministerier</option>
           {ministerier.map((m) => (
@@ -201,17 +206,16 @@ export default function Aktstykker() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Søg i aktstykker..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
           />
         </div>
       </div>
 
-      {/* Åbn alle PDF'er knap */}
-      {pdfUrls.data && Object.values(pdfUrls.data).some(Boolean) && (
-        <div className="mb-4">
+      {/* Action-knapper */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        {pdfUrls.data && Object.values(pdfUrls.data).some(Boolean) && (
           <button
             onClick={() => {
-              // Åbn PDF'er for de filtrerede aktstykker (maks 10)
               const filteredIds = grouped.flatMap(([, sager]) => sager.map(s => s.id))
               const urls = filteredIds
                 .map(id => pdfUrls.data![id])
@@ -226,7 +230,37 @@ export default function Aktstykker() {
             </svg>
             Åbn alle PDF'er (maks 10)
           </button>
-          <span className="text-xs text-gray-400 ml-2">Åbner i nye faneblade</span>
+        )}
+        {allFiltered.length > 0 && (
+          <button
+            onClick={() => downloadCsv(aktstykkerToCsv(allFiltered), 'aktstykker.csv')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Eksportér CSV
+          </button>
+        )}
+        <button
+          onClick={() => setShowAiPanel(!showAiPanel)}
+          className={`inline-flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm font-medium ${
+            showAiPanel
+              ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+          Søg i tekst
+        </button>
+      </div>
+
+      {/* AI panel */}
+      {showAiPanel && (
+        <div className="mb-6">
+          <AiSammenfatning />
         </div>
       )}
 
@@ -262,14 +296,21 @@ export default function Aktstykker() {
         />
       </div>
 
+      {/* Tidslinje */}
+      {aktstykker.data && aktstykker.data.value.length > 0 && (
+        <div className="mb-6">
+          <AktsTidslinje sager={aktstykker.data.value} />
+        </div>
+      )}
+
       {/* Loading */}
       {aktstykker.isLoading && (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-5 animate-pulse">
-              <div className="h-5 bg-gray-200 rounded w-1/3 mb-3" />
-              <div className="h-4 bg-gray-100 rounded w-2/3 mb-2" />
-              <div className="h-4 bg-gray-100 rounded w-1/2" />
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5 animate-pulse">
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded w-2/3 mb-2" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded w-1/2" />
             </div>
           ))}
         </div>
@@ -277,7 +318,7 @@ export default function Aktstykker() {
 
       {/* Fejl */}
       {aktstykker.error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-300 text-sm">
           Kunne ikke hente aktstykker. Prøv igen senere.
         </div>
       )}
@@ -287,8 +328,8 @@ export default function Aktstykker() {
         <div className="space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500">Ingen aktstykker fundet</p>
-              <p className="text-sm text-gray-400 mt-1">Prøv at ændre filtre eller søgning</p>
+              <p className="text-gray-500 dark:text-gray-400">Ingen aktstykker fundet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Prøv at ændre filtre eller søgning</p>
             </div>
           ) : (
             grouped.map(([ministerium, sager]) => (

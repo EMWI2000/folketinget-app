@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Sag } from '../types/ft'
 import { SAG_TYPER, SAG_STATUS } from '../types/ft'
+import CopyButton from './CopyButton'
 
 function formatDato(dato: string): string {
   return new Date(dato).toLocaleDateString('da-DK', {
@@ -24,15 +25,16 @@ export default function SagKort({ sag }: { sag: Sag }) {
   return (
     <Link
       to={`/sag/${sag.id}`}
-      className="block bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-ft-red/20 transition-all group"
+      className="block bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-ft-red/20 transition-all group"
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-mono font-semibold text-ft-red bg-ft-red/10 px-2 py-0.5 rounded">
             {sag.nummer || sag.nummerprefix}
           </span>
+          <CopyButton text={sag.nummer || sag.nummerprefix} label="sagsnummer" />
           {SAG_TYPER[sag.typeid] && (
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+            <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
               {SAG_TYPER[sag.typeid]}
             </span>
           )}
@@ -41,13 +43,13 @@ export default function SagKort({ sag }: { sag: Sag }) {
           {SAG_STATUS[sag.statusid] || `Status ${sag.statusid}`}
         </span>
       </div>
-      <h3 className="text-sm font-semibold text-gray-900 group-hover:text-ft-red transition-colors line-clamp-2 mb-2">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 group-hover:text-ft-red transition-colors line-clamp-2 mb-2">
         {sag.titelkort || sag.titel}
       </h3>
       {sag.resume && (
-        <p className="text-xs text-gray-500 line-clamp-2 mb-2">{sag.resume}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">{sag.resume}</p>
       )}
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-400 dark:text-gray-500">
         Opdateret {formatDato(sag.opdateringsdato)}
       </p>
     </Link>

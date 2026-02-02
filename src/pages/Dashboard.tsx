@@ -8,15 +8,16 @@ import SagKort from '../components/SagKort'
 import AfstemningKort from '../components/AfstemningKort'
 import StatKort from '../components/StatKort'
 import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import WatchlistPanel from '../components/WatchlistPanel'
 
 function LoadingSkeleton() {
   return (
     <div className="space-y-4">
       {[...Array(5)].map((_, i) => (
-        <div key={i} className="bg-white rounded-xl p-5 animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-3" />
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-          <div className="h-3 bg-gray-100 rounded w-1/3" />
+        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5 animate-pulse">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-3" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
+          <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-1/3" />
         </div>
       ))}
     </div>
@@ -25,7 +26,7 @@ function LoadingSkeleton() {
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-300 text-sm">
       {message}
     </div>
   )
@@ -50,8 +51,8 @@ export default function Dashboard() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h2>
-          <p className="text-gray-500 text-sm">Overblik over seneste aktivitet i Folketinget for den valgte samling</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Dashboard</h2>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Overblik over seneste aktivitet i Folketinget for den valgte samling</p>
         </div>
         <PeriodeSelect
           perioder={perioder.data}
@@ -105,7 +106,7 @@ export default function Dashboard() {
         {/* Seneste sager */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Seneste sager</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Seneste sager</h3>
             <Link
               to="/soeg"
               className="text-sm text-ft-red hover:text-ft-red-dark font-medium transition-colors"
@@ -124,18 +125,22 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Seneste afstemninger */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Seneste afstemninger</h3>
-          {afstemninger.isLoading && <LoadingSkeleton />}
-          {afstemninger.error && <ErrorBox message="Kunne ikke hente afstemninger." />}
-          {afstemninger.data && (
-            <div className="space-y-3">
-              {afstemninger.data.value.map((a) => (
-                <AfstemningKort key={a.id} afstemning={a} />
-              ))}
-            </div>
-          )}
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <WatchlistPanel />
+
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Seneste afstemninger</h3>
+            {afstemninger.isLoading && <LoadingSkeleton />}
+            {afstemninger.error && <ErrorBox message="Kunne ikke hente afstemninger." />}
+            {afstemninger.data && (
+              <div className="space-y-3">
+                {afstemninger.data.value.map((a) => (
+                  <AfstemningKort key={a.id} afstemning={a} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

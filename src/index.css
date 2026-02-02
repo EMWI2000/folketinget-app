@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-ft-red: #a1172f;
   --color-ft-red-dark: #8a1328;
