@@ -1,10 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchMedlemmerMedParti, fetchMedlemSager } from '../api/ft'
+import { fetchSoegMedlemmer, fetchMedlemParti, fetchMedlemSager } from '../api/ft'
 
-export function useMedlemmer() {
+export function useSoegMedlemmer(navn: string) {
   return useQuery({
-    queryKey: ['medlemmer-med-parti'],
-    queryFn: fetchMedlemmerMedParti,
+    queryKey: ['soeg-medlemmer', navn],
+    queryFn: () => fetchSoegMedlemmer(navn),
+    enabled: navn.length >= 2,
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+export function useMedlemParti(aktørId: number | null) {
+  return useQuery({
+    queryKey: ['medlem-parti', aktørId],
+    queryFn: () => fetchMedlemParti(aktørId!),
+    enabled: aktørId !== null,
     staleTime: 10 * 60 * 1000,
   })
 }

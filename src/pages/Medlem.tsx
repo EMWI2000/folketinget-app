@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { useMedlemmer, useMedlemSager } from '../hooks/useMedlem'
-import { SAG_TYPER, SAG_STATUS, SAGAKTØR_ROLLER } from '../types/ft'
+import { useSoegMedlemmer, useMedlemParti, useMedlemSager } from '../hooks/useMedlem'
+import { usePerioder } from '../hooks/useAktstykker'
+import { SAG_TYPER, SAG_STATUS, SAGAKTØR_ROLLER, periodeLabel } from '../types/ft'
+import type { Aktør } from '../types/ft'
 
 function formatDato(dato: string | null): string {
   if (!dato) return ''
@@ -9,103 +11,98 @@ function formatDato(dato: string | null): string {
 }
 
 export default function Medlem() {
-  const [selectedParti, setSelectedParti] = useState<string | null>(null)
-  const [selectedMedlem, setSelectedMedlem] = useState<number | null>(null)
+  const [navnSoeg, setNavnSoeg] = useState('')
+  const [selectedMedlem, setSelectedMedlem] = useState<Aktør | null>(null)
   const [selectedRolle, setSelectedRolle] = useState<number | undefined>(undefined)
+  const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
   const [visAlle, setVisAlle] = useState(false)
 
-  const medlemmer = useMedlemmer()
-  const sager = useMedlemSager(selectedMedlem, selectedRolle, visAlle ? 200 : 20)
+  const soegResultater = useSoegMedlemmer(navnSoeg)
+  const parti = useMedlemParti(selectedMedlem?.id ?? null)
+  const perioder = usePerioder()
+  const sager = useMedlemSager(selectedMedlem?.id ?? null, selectedRolle, visAlle ? 200 : 20)
 
-  // Unikke partier fra data
-  const partier = useMemo(() => {
-    if (!medlemmer.data) return []
-    const set = new Set<string>()
-    for (const m of medlemmer.data) {
-      if (m.parti) set.add(m.parti)
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, 'da'))
-  }, [medlemmer.data])
-
-  // Filtrerede medlemmer baseret på parti
-  const filteredMedlemmer = useMemo(() => {
-    if (!medlemmer.data) return []
-    if (!selectedParti) return medlemmer.data
-    return medlemmer.data.filter((m) => m.parti === selectedParti)
-  }, [medlemmer.data, selectedParti])
-
-  // Info om valgt medlem
-  const valgtMedlem = useMemo(() => {
-    if (!selectedMedlem || !medlemmer.data) return null
-    return medlemmer.data.find((m) => m.id === selectedMedlem) ?? null
-  }, [selectedMedlem, medlemmer.data])
-
-  // Sager fra SagAktør-response (med $expand=Sag)
+  // Filtrér sager på periode i klienten (kan ikke gøres i SagAktør API)
   const sagListe = useMemo(() => {
     if (!sager.data?.value) return []
-    return sager.data.value.filter((sa) => sa.Sag).map((sa) => ({
-      ...sa.Sag!,
-      sagaktørRolleid: sa.rolleid,
-    }))
-  }, [sager.data])
+    return sager.data.value
+      .filter((sa) => sa.Sag)
+      .map((sa) => ({
+        ...sa.Sag!,
+        sagaktørRolleid: sa.rolleid,
+      }))
+      .filter((sag) => !selectedPeriode || sag.periodeid === selectedPeriode)
+  }, [sager.data, selectedPeriode])
 
   const totalCount = sager.data ? parseInt(sager.data['odata.count'] ?? '0', 10) : 0
+
+  const handleSelectMedlem = useCallback((medlem: Aktør) => {
+    setSelectedMedlem(medlem)
+    setNavnSoeg('')
+    setVisAlle(false)
+  }, [])
+
+  // Samlings-dropdown (kun "samling" typer)
+  const samlinger = useMemo(() => {
+    if (!perioder.data) return []
+    return perioder.data.filter((p) => p.type === 'samling')
+  }, [perioder.data])
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Medlem</h2>
       <p className="text-gray-600 dark:text-gray-400 mb-6">
         Søg efter hvad et medlem af Folketinget har fremsat, spurgt om eller besvaret.
-        Vælg et medlem og en handling for at se tilknyttede sager.
+        Skriv et navn for at finde et medlem.
       </p>
 
-      {/* Filtre */}
+      {/* Søg + filtre */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Parti-filter */}
-          <div>
+          {/* Navnesøgning */}
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Parti
+              Søg medlem
             </label>
-            <select
-              value={selectedParti ?? ''}
+            <input
+              type="text"
+              value={selectedMedlem ? selectedMedlem.navn : navnSoeg}
               onChange={(e) => {
-                setSelectedParti(e.target.value || null)
-                setSelectedMedlem(null)
-                setVisAlle(false)
+                setNavnSoeg(e.target.value)
+                if (selectedMedlem) {
+                  setSelectedMedlem(null)
+                  setVisAlle(false)
+                }
               }}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
-            >
-              <option value="">Alle partier</option>
-              {partier.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Medlem-dropdown */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Medlem
-            </label>
-            <select
-              value={selectedMedlem ?? ''}
-              onChange={(e) => {
-                setSelectedMedlem(e.target.value ? Number(e.target.value) : null)
-                setVisAlle(false)
+              onFocus={() => {
+                if (selectedMedlem) {
+                  setNavnSoeg(selectedMedlem.navn)
+                  setSelectedMedlem(null)
+                }
               }}
+              placeholder="Skriv et navn..."
               className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
-              disabled={medlemmer.isLoading}
-            >
-              <option value="">
-                {medlemmer.isLoading ? 'Henter medlemmer...' : 'Vælg medlem'}
-              </option>
-              {filteredMedlemmer.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.efternavn}, {m.fornavn}{m.partiKort ? ` (${m.partiKort})` : ''}
-                </option>
-              ))}
-            </select>
+            />
+            {/* Dropdown med søgeresultater */}
+            {navnSoeg.length >= 2 && !selectedMedlem && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                {soegResultater.isLoading && (
+                  <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Søger...</div>
+                )}
+                {soegResultater.data && soegResultater.data.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">Ingen resultater</div>
+                )}
+                {soegResultater.data?.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleSelectMedlem(m)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors"
+                  >
+                    {m.navn}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Rolle/handling-dropdown */}
@@ -127,49 +124,57 @@ export default function Medlem() {
               ))}
             </select>
           </div>
+
+          {/* Periode-dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Samling
+            </label>
+            <select
+              value={selectedPeriode ?? ''}
+              onChange={(e) => setSelectedPeriode(e.target.value ? Number(e.target.value) : null)}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
+            >
+              <option value="">Alle samlinger</option>
+              {samlinger.map((p) => (
+                <option key={p.id} value={p.id}>{periodeLabel(p)}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Loading */}
-      {medlemmer.isLoading && (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          Henter medlemmer fra Folketinget...
-        </div>
-      )}
-
-      {/* Error */}
-      {medlemmer.error && (
-        <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded-xl mb-6">
-          Kunne ikke hente medlemmer: {(medlemmer.error as Error).message}
-        </div>
-      )}
-
       {/* Ingen medlem valgt */}
-      {!selectedMedlem && !medlemmer.isLoading && !medlemmer.error && (
+      {!selectedMedlem && (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          Vælg et medlem ovenfor for at se deres sager
+          Søg efter et medlem ovenfor for at se deres sager
         </div>
       )}
 
       {/* Resultater */}
-      {selectedMedlem && valgtMedlem && (
+      {selectedMedlem && (
         <div>
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {valgtMedlem.navn}
-              {valgtMedlem.parti && (
-                <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
-                  {valgtMedlem.parti}
+              {selectedMedlem.navn}
+              {parti.data && (
+                <span className="text-gray-500 dark:text-gray-400 font-normal ml-2 text-base">
+                  {parti.data}
+                </span>
+              )}
+              {parti.isLoading && (
+                <span className="text-gray-400 dark:text-gray-500 font-normal ml-2 text-sm">
+                  (henter parti...)
                 </span>
               )}
             </h3>
-            {totalCount > 0 && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {totalCount} sag{totalCount !== 1 ? 'er' : ''}
-                {selectedRolle ? ` som ${SAGAKTØR_ROLLER[selectedRolle]?.toLowerCase()}` : ''}
-              </span>
-            )}
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {sagListe.length} sag{sagListe.length !== 1 ? 'er' : ''}
+              {selectedRolle ? ` som ${SAGAKTØR_ROLLER[selectedRolle]?.toLowerCase()}` : ''}
+              {selectedPeriode ? ' i valgt samling' : ''}
+              {totalCount > sagListe.length && !selectedPeriode ? ` (af ${totalCount} totalt)` : ''}
+            </span>
           </div>
 
           {/* Sager loading */}
@@ -194,15 +199,15 @@ export default function Medlem() {
           {/* Sager liste */}
           {!sager.isLoading && sagListe.length === 0 && !sager.error && (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              Ingen sager fundet{selectedRolle ? ` med denne handling` : ''}.
+              Ingen sager fundet{selectedRolle ? ' med denne handling' : ''}{selectedPeriode ? ' i denne samling' : ''}.
             </div>
           )}
 
           {sagListe.length > 0 && (
             <div className="space-y-3">
-              {sagListe.map((sag) => (
+              {sagListe.map((sag, idx) => (
                 <Link
-                  key={`${sag.id}-${sag.sagaktørRolleid}`}
+                  key={`${sag.id}-${sag.sagaktørRolleid}-${idx}`}
                   to={`/sag/${sag.id}`}
                   className="block bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4"
                 >
@@ -255,7 +260,7 @@ export default function Medlem() {
                 onClick={() => setVisAlle(true)}
                 className="px-6 py-2 bg-ft-red text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
               >
-                Vis alle {totalCount} sager
+                Vis flere (henter op til 200)
               </button>
             </div>
           )}
