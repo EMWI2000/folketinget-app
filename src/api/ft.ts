@@ -1,4 +1,4 @@
-import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord, Periode, SagDokument } from '../types/ft'
+import type { ODataResponse, Sag, Afstemning, Sagstrin, Dokument, Aktør, Emneord, Periode, SagDokument, AktørAktør, MedlemMedParti, SagAktørRelation } from '../types/ft'
 
 const BASE_URL = 'https://oda.ft.dk/api'
 
@@ -199,6 +199,85 @@ export async function fetchAktstykker(periodeid: number): Promise<ODataResponse<
     $expand: 'SagDokument',
   })
   return fetchApi<ODataResponse<Sag>>(url)
+}
+
+// ─── Medlemmer ──────────────────────────────────────────
+
+/** Hent alle aktive folketingsmedlemmer (typeid=5, ingen slutdato) */
+export async function fetchMedlemmer(): Promise<Aktør[]> {
+  // Hent i batches af 200 da der er ~180 aktive MF'ere
+  const url = `${BASE_URL}/Akt%C3%B8r?%24filter=typeid%20eq%205%20and%20slutdato%20eq%20null&%24top=300&%24orderby=efternavn&%24select=id,navn,fornavn,efternavn,typeid,gruppenavnkort,startdato,slutdato,opdateringsdato,periodeid,biografi`
+  const res = await fetchApi<ODataResponse<Aktør>>(url)
+  return res.value
+}
+
+/** Hent alle aktive partimedlemskaber (AktørAktør rolleid=15, slutdato eq null) */
+export async function fetchAktivePartimedlemskaber(): Promise<AktørAktør[]> {
+  const url = `${BASE_URL}/Akt%C3%B8rAkt%C3%B8r?%24filter=rolleid%20eq%2015%20and%20slutdato%20eq%20null&%24top=500&%24inlinecount=allpages`
+  const res = await fetchApi<ODataResponse<AktørAktør>>(url)
+  return res.value
+}
+
+/** Hent partier (typeid=4) — returnerer unikke partinavne */
+export async function fetchPartier(): Promise<Aktør[]> {
+  const url = `${BASE_URL}/Akt%C3%B8r?%24filter=typeid%20eq%204&%24top=500&%24orderby=navn&%24select=id,navn,typeid,gruppenavnkort,fornavn,efternavn,startdato,slutdato,opdateringsdato,periodeid,biografi`
+  const res = await fetchApi<ODataResponse<Aktør>>(url)
+  return res.value
+}
+
+/** Hent alle aktive MF'ere med parti-info samlet */
+export async function fetchMedlemmerMedParti(): Promise<MedlemMedParti[]> {
+  const [medlemmer, medlemskaber, partier] = await Promise.all([
+    fetchMedlemmer(),
+    fetchAktivePartimedlemskaber(),
+    fetchPartier(),
+  ])
+
+  // Byg parti-lookup: partiAktørId → partinavn
+  const partiNavne = new Map<number, string>()
+  for (const p of partier) {
+    if (!partiNavne.has(p.id)) {
+      partiNavne.set(p.id, p.navn)
+    }
+  }
+
+  // Byg medlemskab-lookup: MF aktørid → partiAktørId
+  const medlemParti = new Map<number, number>()
+  for (const m of medlemskaber) {
+    medlemParti.set(m.fraaktørid, m.tilaktørid)
+  }
+
+  return medlemmer.map((m) => {
+    const partiId = medlemParti.get(m.id)
+    const partiNavn = partiId ? partiNavne.get(partiId) ?? null : null
+    // Udtræk kort partinavn fra fuldt navn, f.eks. "Socialdemokratiet" → "S"
+    const partiKort = partiNavn ? partiNavn.replace(/^(.+?)\s*[-–].*$/, '$1').trim() : null
+    return {
+      id: m.id,
+      navn: m.navn,
+      fornavn: m.fornavn,
+      efternavn: m.efternavn,
+      parti: partiNavn,
+      partiKort,
+    }
+  }).sort((a, b) => (a.efternavn ?? '').localeCompare(b.efternavn ?? '', 'da'))
+}
+
+/** Hent sager for et bestemt MF, evt. filtreret på rolle */
+export async function fetchMedlemSager(opts: {
+  aktørId: number
+  rolleid?: number
+  top?: number
+  skip?: number
+}): Promise<ODataResponse<SagAktørRelation>> {
+  const filters = [`akt%C3%B8rid eq ${opts.aktørId}`]
+  if (opts.rolleid) {
+    filters.push(`rolleid eq ${opts.rolleid}`)
+  }
+  const filterStr = filters.join(' and ')
+  const url = `${BASE_URL}/SagAkt%C3%B8r?%24filter=${filterStr}&%24top=${opts.top ?? 20}&%24skip=${opts.skip ?? 0}&%24orderby=opdateringsdato%20desc&%24expand=Sag&%24inlinecount=allpages`
+  const res = await fetchApi<ODataResponse<SagAktørRelation>>(url)
+  return res
 }
 
 /** Hent PDF-URL for et aktstykke via SagDokument → Dokument → Fil */

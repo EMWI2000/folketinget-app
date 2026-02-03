@@ -90,6 +90,7 @@ export interface SagAktørRelation {
   sagid: number
   opdateringsdato: string
   rolleid: number
+  Sag?: Sag
 }
 
 export interface EmneordSagRelation {
@@ -198,4 +199,34 @@ export const AKTØR_ROLLER: Record<number, string> = {
   11: 'Ordfører',
   14: 'Minister',
   16: 'Medunderskriver',
+}
+
+export interface AktørAktør {
+  id: number
+  fraaktørid: number
+  tilaktørid: number
+  startdato: string
+  slutdato: string | null
+  rolleid: number
+  opdateringsdato: string
+}
+
+/** Roller i SagAktør — hvordan et MF er tilknyttet en sag */
+export const SAGAKTØR_ROLLER: Record<number, string> = {
+  4: 'Stillet af',
+  10: 'Spørger',
+  14: 'Minister',
+  15: 'Forespørger',
+  16: 'Forslagsstiller',
+  19: 'Forslagsstiller (reg.)',
+  23: 'Besvaret af',
+}
+
+export interface MedlemMedParti {
+  id: number
+  navn: string
+  fornavn: string | null
+  efternavn: string | null
+  parti: string | null
+  partiKort: string | null
 }

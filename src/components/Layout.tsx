@@ -10,6 +10,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/', label: 'Dashboard' },
     { to: '/soeg', label: 'Søg' },
     { to: '/aktstykker', label: 'Aktstykker' },
+    { to: '/medlem', label: 'Medlem' },
     { to: '/statistik', label: 'Statistik' },
   ]
 
