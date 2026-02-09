@@ -165,52 +165,79 @@ function buildTree(parsedLines: ParsedLine[], year: number): FinanslovData {
   return { year, tree, nodes, index }
 }
 
-/** Hent manifest med tilgængelige år */
-async function fetchManifest(): Promise<number[]> {
+/** Alle mulige finanslovsår - opdater denne liste når nye filer tilføjes */
+const ALL_POSSIBLE_YEARS = [2021, 2022, 2023, 2024, 2025, 2026]
+
+/** Hent og parse finanslovs-CSV for et givet år - returnerer null hvis filen ikke findes */
+export async function parseFinanslovCSV(year: number): Promise<FinanslovData | null> {
   try {
-    const response = await fetch('/Finanslovsdatabasen/manifest.json')
+    // Hent CSV-filen fra public-mappen
+    const response = await fetch(`/Finanslovsdatabasen/${year}.csv`)
     if (!response.ok) {
-      // Fallback hvis manifest ikke findes
-      return [2024, 2025, 2026]
+      console.warn(`Finanslov for ${year} ikke fundet`)
+      return null
     }
-    const manifest = await response.json()
-    return manifest.years as number[]
-  } catch {
+
+    // Decode som ISO-8859-1 (Latin-1)
+    const buffer = await response.arrayBuffer()
+    const decoder = new TextDecoder('iso-8859-1')
+    const content = decoder.decode(buffer)
+
+    // Parse og byg træ
+    const parsedLines = parseCSVContent(content, year)
+    return buildTree(parsedLines, year)
+  } catch (error) {
+    console.warn(`Fejl ved indlæsning af finanslov for ${year}:`, error)
+    return null
+  }
+}
+
+/** Hent tilgængelige år ved at prøve at indlæse hver fil */
+export async function fetchAvailableYears(): Promise<number[]> {
+  const availableYears: number[] = []
+
+  // Prøv at hente hver fil og se hvilke der findes
+  for (const year of ALL_POSSIBLE_YEARS) {
+    try {
+      const response = await fetch(`/Finanslovsdatabasen/${year}.csv`, { method: 'HEAD' })
+      if (response.ok) {
+        availableYears.push(year)
+      }
+    } catch {
+      // Fil findes ikke, skip
+    }
+  }
+
+  // Fallback til de kendte filer hvis ingen blev fundet
+  if (availableYears.length === 0) {
     return [2024, 2025, 2026]
   }
-}
 
-/** Hent og parse finanslovs-CSV for et givet år */
-export async function parseFinanslovCSV(year: number): Promise<FinanslovData> {
-  // Hent CSV-filen fra public-mappen
-  const response = await fetch(`/Finanslovsdatabasen/${year}.csv`)
-  if (!response.ok) {
-    throw new Error(`Kunne ikke hente finanslov for ${year}: ${response.statusText}`)
-  }
-
-  // Decode som ISO-8859-1 (Latin-1)
-  const buffer = await response.arrayBuffer()
-  const decoder = new TextDecoder('iso-8859-1')
-  const content = decoder.decode(buffer)
-
-  // Parse og byg træ
-  const parsedLines = parseCSVContent(content, year)
-  return buildTree(parsedLines, year)
-}
-
-/** Hent tilgængelige år fra manifest */
-export async function fetchAvailableYears(): Promise<number[]> {
-  return fetchManifest()
+  return availableYears.sort((a, b) => a - b)
 }
 
 /** Parse alle tilgængelige år og kombiner */
 export async function parseAllFinanslov(): Promise<Map<number, FinanslovData>> {
-  const years = await fetchManifest()
-  const results = await Promise.all(years.map(parseFinanslovCSV))
-
   const map = new Map<number, FinanslovData>()
-  for (const data of results) {
-    map.set(data.year, data)
+
+  // Prøv at indlæse alle mulige år
+  const results = await Promise.all(
+    ALL_POSSIBLE_YEARS.map(async (year) => {
+      const data = await parseFinanslovCSV(year)
+      return { year, data }
+    })
+  )
+
+  // Tilføj kun dem der blev indlæst korrekt
+  for (const { year, data } of results) {
+    if (data) {
+      map.set(year, data)
+    }
+  }
+
+  // Hvis ingen data blev fundet, kast en fejl
+  if (map.size === 0) {
+    throw new Error('Kunne ikke indlæse nogen finanslovsdata. Tjek at CSV-filerne ligger i public/Finanslovsdatabasen/')
   }
 
   return map
