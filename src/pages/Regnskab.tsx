@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAllRegnskab, useAvailableRegnskabYears } from '../hooks/useRegnskab'
 import type { RegnskabNode, HierarchyLevel } from '../lib/regnskab/types'
 import { LEVEL_LABELS, COMPARE_COLORS } from '../lib/regnskab/types'
-import { formatRegnskab, formatRegnskabCompact } from '../lib/regnskab/formatter'
+import { formatRegnskab, formatRegnskabCompact, formatDanishNumber } from '../lib/regnskab/formatter'
 
 interface CompareItem {
   node: RegnskabNode
@@ -20,6 +20,7 @@ export default function Regnskab() {
   const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
   const [compareItems, setCompareItems] = useState<CompareItem[]>([])
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [regnskabskontoFilter, setRegnskabskontoFilter] = useState<string | null>(null)
 
   // Sæt default år når data er indlæst
   useEffect(() => {
@@ -121,6 +122,108 @@ export default function Regnskab() {
       year1Label: currentYearData.year1Label,
       year2Label: currentYearData.year2Label,
     }
+  }, [currentYearData])
+
+  // Tidsserie data for valgte elementer
+  const timeSeriesData = useMemo(() => {
+    if (compareItems.length === 0 || !allData.data) return []
+
+    return compareItems.map(({ node, color }) => {
+      const points: { year: number; value: number }[] = []
+
+      // Saml data fra alle filer
+      for (const [_fileYear, data] of allData.data!) {
+        const foundNode = data.index[node.code]
+        if (!foundNode) continue
+
+        // Regnskabsdatabasen har year1 (Y-2) og year2 (Y-1)
+        points.push({ year: data.year1Label, value: foundNode.values.year1 })
+        points.push({ year: data.year2Label, value: foundNode.values.year2 })
+      }
+
+      // Fjern dubletter
+      const byYear = new Map<number, number>()
+      for (const p of points) {
+        byYear.set(p.year, p.value)
+      }
+
+      return {
+        name: node.name,
+        code: node.code,
+        color,
+        points: Array.from(byYear.entries())
+          .map(([year, value]) => ({ year, value }))
+          .sort((a, b) => a.year - b.year),
+      }
+    })
+  }, [compareItems, allData.data])
+
+  // Tabeldata
+  const tableData = useMemo(() => {
+    if (compareItems.length === 0 || !allData.data) return { years: [] as number[], rows: [] as { name: string; code: string; color: string; values: Record<number, number> }[] }
+
+    const allYears = new Set<number>()
+    for (const series of timeSeriesData) {
+      for (const point of series.points) {
+        allYears.add(point.year)
+      }
+    }
+    const years = Array.from(allYears).sort((a, b) => a - b)
+
+    const rows = timeSeriesData.map((series) => {
+      const values: Record<number, number> = {}
+      for (const point of series.points) {
+        values[point.year] = point.value
+      }
+      return {
+        name: series.name,
+        code: series.code,
+        color: series.color,
+        values,
+      }
+    })
+
+    return { years, rows }
+  }, [compareItems, allData.data, timeSeriesData])
+
+  // Eksportér tabel som CSV
+  const handleExportTable = useCallback(() => {
+    if (tableData.rows.length === 0) return
+
+    const headers = ['Kode', 'Navn', ...tableData.years.map(String)]
+    const csvRows = tableData.rows.map((row) => [
+      row.code,
+      row.name,
+      ...tableData.years.map((year) => formatDanishNumber(row.values[year] ?? 0, 1)),
+    ])
+
+    const csv = [headers, ...csvRows].map((r) => r.map((c) => `"${c}"`).join(';')).join('\n')
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `regnskab-tidsserie-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [tableData])
+
+  // Find alle regnskabskonti (2-cifrede, starter med 1-9)
+  const availableRegnskabskonti = useMemo(() => {
+    if (!currentYearData) return []
+
+    const konti = new Map<string, string>()
+    for (const node of currentYearData.nodes) {
+      if (node.level === 'regnskabskonto') {
+        if (!konti.has(node.code)) {
+          konti.set(node.code, node.name)
+        }
+      }
+    }
+
+    return Array.from(konti.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code))
   }, [currentYearData])
 
   // Render en node rekursivt
@@ -307,9 +410,9 @@ export default function Regnskab() {
             )}
           </div>
 
-          {/* Højre panel: Sammenligning */}
+          {/* Højre panel: Tidsserie + tabel */}
           <div className="lg:col-span-7 space-y-6">
-            {/* Sammenligningscanvas */}
+            {/* Valgte elementer */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Sammenligning ({compareItems.length}/{COMPARE_COLORS.length})
@@ -318,91 +421,220 @@ export default function Regnskab() {
               {compareItems.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <svg className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                  <p>Klik på + ved en konto for at tilføje til sammenligning.</p>
+                  <p className="mb-2">Vælg konti fra træet til venstre for at se tidsserie og tabel.</p>
+                  <p className="text-sm">Klik på + ikonet ved en konto for at tilføje den til sammenligningen.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Valgte elementer */}
-                  <div className="flex flex-wrap gap-2">
-                    {compareItems.map(({ node, color }, index) => (
-                      <div
-                        key={node.id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full"
+                <div className="flex flex-wrap gap-2">
+                  {compareItems.map(({ node, color }, index) => (
+                    <div
+                      key={node.id}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full"
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{node.name}</span>
+                      <button
+                        onClick={() => removeFromCompare(index)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                       >
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{node.name}</span>
-                        <button
-                          onClick={() => removeFromCompare(index)}
-                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Bar chart */}
-                  {currentYearData && (
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                        Sammenligning ({currentYearData.year1Label} / {currentYearData.year2Label})
-                      </h4>
-                      {compareItems.map(({ node, color }) => {
-                        const maxValue = Math.max(
-                          ...compareItems.flatMap(({ node: n }) => [Math.abs(n.values.year1), Math.abs(n.values.year2)])
-                        )
-
-                        return (
-                          <div key={node.id}>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-700 dark:text-gray-300 truncate">{node.name}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
-                                  <div
-                                    className="h-full rounded transition-all"
-                                    style={{
-                                      width: `${(Math.abs(node.values.year1) / maxValue) * 100}%`,
-                                      backgroundColor: color,
-                                    }}
-                                  />
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                  {formatRegnskab(node.values.year1)} mio. ({currentYearData.year1Label})
-                                </div>
-                              </div>
-                              <div>
-                                <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
-                                  <div
-                                    className="h-full rounded transition-all"
-                                    style={{
-                                      width: `${(Math.abs(node.values.year2) / maxValue) * 100}%`,
-                                      backgroundColor: color,
-                                      opacity: 0.7,
-                                    }}
-                                  />
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                  {formatRegnskab(node.values.year2)} mio. ({currentYearData.year2Label})
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
+
+            {/* Stor tidsserie + tabel */}
+            {compareItems.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Tidsserie (Regnskab)
+                  </h3>
+                  <button
+                    onClick={handleExportTable}
+                    className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Eksportér CSV
+                  </button>
+                </div>
+
+                {/* Graf */}
+                <div className="h-[280px]">
+                  <RegnskabTimeSeriesChart data={timeSeriesData} />
+                </div>
+
+                {/* Tabel */}
+                {tableData.rows.length > 0 && (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 pr-4 text-gray-600 dark:text-gray-400 font-medium sticky left-0 bg-white dark:bg-gray-800">Konto</th>
+                          {tableData.years.map((year) => (
+                            <th key={year} className="text-right py-2 px-2 text-gray-600 dark:text-gray-400 font-medium whitespace-nowrap">
+                              {year}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableData.rows.map((row) => (
+                          <tr key={row.code} className="border-b border-gray-100 dark:border-gray-700">
+                            <td className="py-2 pr-4 sticky left-0 bg-white dark:bg-gray-800">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
+                                <span className="text-gray-500 dark:text-gray-500 font-mono text-xs">{row.code}</span>
+                                <span className="text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{row.name}</span>
+                              </div>
+                            </td>
+                            {tableData.years.map((year) => (
+                              <td key={year} className="text-right py-2 px-2 font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                {row.values[year] !== undefined ? formatRegnskabCompact(row.values[year]) : '-'}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Regnskabskonto filter */}
+            {availableRegnskabskonti.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Regnskabskonto filter
+                  </h3>
+                  <select
+                    value={regnskabskontoFilter ?? ''}
+                    onChange={(e) => setRegnskabskontoFilter(e.target.value || null)}
+                    className="text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1"
+                  >
+                    <option value="">Alle regnskabskonti</option>
+                    {availableRegnskabskonti.map((konto) => (
+                      <option key={konto.code} value={konto.code}>
+                        {konto.code} - {konto.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Regnskabskonti (fx 18, 22, 44) viser udgiftstyper under hver underkonto.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+/** Simpel tidsserie-graf for regnskab */
+function RegnskabTimeSeriesChart({
+  data,
+}: {
+  data: { name: string; code: string; color: string; points: { year: number; value: number }[] }[]
+}) {
+  if (data.length === 0 || data[0].points.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+        Ingen tidsserie-data tilgængelig
+      </div>
+    )
+  }
+
+  // Find alle år og min/max
+  const allYears = [...new Set(data.flatMap((d) => d.points.map((p) => p.year)))].sort()
+  const allValues = data.flatMap((d) => d.points.map((p) => p.value))
+  const minVal = Math.min(0, ...allValues)
+  const maxVal = Math.max(...allValues)
+  const range = maxVal - minVal || 1
+
+  const width = 600
+  const height = 260
+  const padding = { top: 20, right: 20, bottom: 30, left: 60 }
+  const chartW = width - padding.left - padding.right
+  const chartH = height - padding.top - padding.bottom
+
+  const xScale = (year: number) => {
+    const minY = Math.min(...allYears)
+    const maxY = Math.max(...allYears)
+    return padding.left + ((year - minY) / (maxY - minY || 1)) * chartW
+  }
+
+  const yScale = (val: number) => {
+    return padding.top + chartH - ((val - minVal) / range) * chartH
+  }
+
+  // Y-akse ticks
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => minVal + pct * range)
+
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" className="overflow-visible">
+      {/* Grid */}
+      {yTicks.map((tick, i) => (
+        <g key={i}>
+          <line
+            x1={padding.left}
+            y1={yScale(tick)}
+            x2={width - padding.right}
+            y2={yScale(tick)}
+            stroke="currentColor"
+            className="text-gray-100 dark:text-gray-700"
+          />
+          <text
+            x={padding.left - 8}
+            y={yScale(tick)}
+            textAnchor="end"
+            dominantBaseline="middle"
+            className="text-[10px] fill-gray-500 dark:fill-gray-400"
+          >
+            {formatRegnskabCompact(tick)}
+          </text>
+        </g>
+      ))}
+
+      {/* X-akse */}
+      {allYears.map((year) => (
+        <text
+          key={year}
+          x={xScale(year)}
+          y={height - 8}
+          textAnchor="middle"
+          className="text-[11px] fill-gray-600 dark:fill-gray-400"
+        >
+          {year}
+        </text>
+      ))}
+
+      {/* Linjer */}
+      {data.map((series) => {
+        const pathD = series.points
+          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.year)} ${yScale(p.value)}`)
+          .join(' ')
+
+        return (
+          <g key={series.code}>
+            <path d={pathD} fill="none" stroke={series.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            {series.points.map((p) => (
+              <circle key={p.year} cx={xScale(p.year)} cy={yScale(p.value)} r={4} fill={series.color} stroke="white" strokeWidth={1.5} />
+            ))}
+          </g>
+        )
+      })}
+    </svg>
   )
 }

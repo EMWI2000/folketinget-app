@@ -54,6 +54,10 @@ function parseLine(line: string): ParsedLine | null {
  * - 4-cifret: aktivitetsområde ELLER regnskabskonto_detalje
  * - 6-cifret: hovedkonto
  * - 8-cifret: underkonto
+ *
+ * VIGTIGT: Aktivitetsområder starter med "0" (fx "0111", "0211"),
+ * mens regnskabskonti starter med "1-9" (fx "1100", "2200", "4400").
+ * Dette er den primære måde at skelne mellem de to ved 4-cifrede koder.
  */
 function determineLevel(
   code: string,
@@ -61,41 +65,54 @@ function determineLevel(
   nextCode: string | null,
   lastUnderkontoCode: string | null
 ): HierarchyLevel {
-  // Hvis vi har en lastUnderkontoCode og koden er 2-4 cifre,
-  // er det en regnskabskonto under underkonten
-  if (lastUnderkontoCode) {
-    if (codeLength === 2) {
-      // Tjek om næste linje er 4-cifret regnskabskonto
-      if (nextCode && nextCode.length === 4 && !nextCode.startsWith(code.slice(0, 2))) {
-        return 'regnskabskonto'
-      }
-      // Tjek om det er en paragraf (næste er 3-cifret med samme prefix)
-      if (nextCode && nextCode.length === 3 && nextCode.startsWith(code)) {
-        return 'paragraf'
-      }
-      return 'regnskabskonto'
-    }
-    if (codeLength === 4) {
-      return 'regnskabskonto_detalje'
-    }
+  const firstDigit = code[0]
+  const startsWithZero = firstDigit === '0'
+
+  // 8-cifret er altid underkonto
+  if (codeLength === 8) {
+    return 'underkonto'
   }
 
-  // Standard hierarki
+  // 6-cifret er altid hovedkonto (starter altid med 0)
+  if (codeLength === 6) {
+    return 'hovedkonto'
+  }
+
+  // 4-cifret: aktivitetsområde (starter med 0) vs regnskabskonto_detalje (starter med 1-9)
+  if (codeLength === 4) {
+    if (startsWithZero) {
+      return 'aktivitetsomraade'
+    }
+    // Regnskabskonto detalje (fx "1100", "2200") - kun hvis vi er efter en underkonto
+    if (lastUnderkontoCode) {
+      return 'regnskabskonto_detalje'
+    }
+    // Fallback - sjældent, men håndter det
+    return 'aktivitetsomraade'
+  }
+
+  // 3-cifret: hovedområde (starter altid med 0)
+  if (codeLength === 3) {
+    return 'hovedomraade'
+  }
+
+  // 2-cifret: paragraf (starter med 0) vs regnskabskonto (starter med 1-9)
   if (codeLength === 2) {
-    // Look-ahead: er næste linje en 3-cifret under denne paragraf?
+    if (startsWithZero) {
+      return 'paragraf'
+    }
+    // Regnskabskonto hovedkategori (fx "11", "18", "22") - kun hvis vi er efter en underkonto
+    if (lastUnderkontoCode) {
+      return 'regnskabskonto'
+    }
+    // Hvis ikke efter underkonto, tjek look-ahead
     if (nextCode && nextCode.length === 3 && nextCode.startsWith(code)) {
       return 'paragraf'
     }
     return 'regnskabskonto'
   }
 
-  switch (codeLength) {
-    case 3: return 'hovedomraade'
-    case 4: return 'aktivitetsomraade'
-    case 6: return 'hovedkonto'
-    case 8: return 'underkonto'
-    default: return 'regnskabskonto'
-  }
+  return 'regnskabskonto'
 }
 
 /** Find parent-kode baseret på niveau */
@@ -161,21 +178,23 @@ function buildTree(parsedLines: ParsedLine[], year: number): RegnskabData {
       lastUnderkontoCode
     )
 
-    // Opdater lastUnderkontoCode hvis dette er en underkonto
+    // Opdater tracking baseret på niveau
     if (level === 'underkonto') {
       lastUnderkontoCode = line.code
       lastRegnskabskontoCode = null // Reset regnskabskonto når vi starter ny underkonto
     } else if (level === 'regnskabskonto') {
       lastRegnskabskontoCode = `${lastUnderkontoCode}-${line.code}`
     } else if (level === 'paragraf' || level === 'hovedomraade' || level === 'aktivitetsomraade' || level === 'hovedkonto') {
-      // Reset underkonto tracking når vi forlader underkonto-niveau
+      // Reset underkonto tracking når vi går til et kontohieraki-niveau
+      // (paragraf, hovedområde, aktivitetsområde, hovedkonto)
       lastUnderkontoCode = null
       lastRegnskabskontoCode = null
     }
+    // Note: regnskabskonto_detalje nulstiller IKKE lastUnderkontoCode
 
     const parentCode = findParentCode(line.code, level, lastUnderkontoCode, lastRegnskabskontoCode)
 
-    // Generér unikt ID
+    // Generér unikt ID - regnskabskonti får underkonto-prefix for at være unikke
     const uniqueId = level === 'regnskabskonto' || level === 'regnskabskonto_detalje'
       ? `${year}-${lastUnderkontoCode}-${line.code}`
       : `${year}-${line.code}`
