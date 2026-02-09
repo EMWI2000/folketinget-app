@@ -1,7 +1,7 @@
-/** Regnskabsværdier - to kolonner per fil (to forskellige regnskabsår) */
+/** Regnskabsværdier - to kolonner per fil (bevilling og faktisk regnskab for samme år) */
 export interface RegnskabValues {
-  year1: number // Første kolonne (typisk regnskab for foregående år)
-  year2: number // Anden kolonne (typisk regnskab for året før)
+  year1: number // Første kolonne: Bevilling
+  year2: number // Anden kolonne: Faktisk regnskab
 }
 
 export type HierarchyLevel =
@@ -25,9 +25,9 @@ export interface RegnskabNode {
 }
 
 export interface RegnskabData {
-  year: number // Filens år (fx 2024)
-  year1Label: number // Første kolonne dækker dette år (fx 2022)
-  year2Label: number // Anden kolonne dækker dette år (fx 2023)
+  year: number // Filens år (fx 2024) - data gælder for dette år
+  year1Label: string // Label for første kolonne (fx "Bevilling")
+  year2Label: string // Label for anden kolonne (fx "Regnskab")
   tree: RegnskabNode[]
   nodes: RegnskabNode[]
   index: Record<string, RegnskabNode>

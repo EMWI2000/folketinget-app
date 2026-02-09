@@ -124,43 +124,41 @@ export default function Regnskab() {
     }
   }, [currentYearData])
 
+  // Valg mellem bevilling og regnskab
+  const [showBevilling, setShowBevilling] = useState(false) // Default: vis regnskab
+
   // Tidsserie data for valgte elementer
+  // Regnskabsdatabasen har bevilling (year1) og faktisk regnskab (year2) per år
   const timeSeriesData = useMemo(() => {
     if (compareItems.length === 0 || !allData.data) return []
 
     return compareItems.map(({ node, color }) => {
       const points: { year: number; value: number }[] = []
 
-      // Saml data fra alle filer
-      for (const [_fileYear, data] of allData.data!) {
+      // Saml data fra alle filer - hver fil = et år
+      for (const [fileYear, data] of allData.data!) {
         const foundNode = data.index[node.code]
         if (!foundNode) continue
 
-        // Regnskabsdatabasen har year1 (Y-2) og year2 (Y-1)
-        points.push({ year: data.year1Label, value: foundNode.values.year1 })
-        points.push({ year: data.year2Label, value: foundNode.values.year2 })
-      }
-
-      // Fjern dubletter
-      const byYear = new Map<number, number>()
-      for (const p of points) {
-        byYear.set(p.year, p.value)
+        // Brug bevilling (year1) eller faktisk regnskab (year2)
+        points.push({
+          year: fileYear,
+          value: showBevilling ? foundNode.values.year1 : foundNode.values.year2,
+        })
       }
 
       return {
         name: node.name,
         code: node.code,
         color,
-        points: Array.from(byYear.entries())
-          .map(([year, value]) => ({ year, value }))
-          .sort((a, b) => a.year - b.year),
+        points: points.sort((a, b) => a.year - b.year),
       }
     })
-  }, [compareItems, allData.data])
+  }, [compareItems, allData.data, showBevilling])
 
-  // Tabeldata
+  // Tabeldata - afhænger af timeSeriesData
   const tableData = useMemo(() => {
-    if (compareItems.length === 0 || !allData.data) return { years: [] as number[], rows: [] as { name: string; code: string; color: string; values: Record<number, number> }[] }
+    if (timeSeriesData.length === 0) return { years: [] as number[], rows: [] as { name: string; code: string; color: string; values: Record<number, number> }[] }
 
     const allYears = new Set<number>()
     for (const series of timeSeriesData) {
@@ -184,7 +182,7 @@ export default function Regnskab() {
     })
 
     return { years, rows }
-  }, [compareItems, allData.data, timeSeriesData])
+  }, [timeSeriesData])
 
   // Eksportér tabel som CSV
   const handleExportTable = useCallback(() => {
@@ -453,9 +451,34 @@ export default function Regnskab() {
             {compareItems.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Tidsserie (Regnskab)
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Tidsserie ({showBevilling ? 'Bevilling' : 'Regnskab'})
+                    </h3>
+                    {/* Bevilling/Regnskab-vælger */}
+                    <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                      <button
+                        onClick={() => setShowBevilling(true)}
+                        className={`px-2 py-1 text-xs font-medium transition-colors ${
+                          showBevilling
+                            ? 'bg-ft-red text-white'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        Bevilling
+                      </button>
+                      <button
+                        onClick={() => setShowBevilling(false)}
+                        className={`px-2 py-1 text-xs font-medium transition-colors ${
+                          !showBevilling
+                            ? 'bg-ft-red text-white'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        Regnskab
+                      </button>
+                    </div>
+                  </div>
                   <button
                     onClick={handleExportTable}
                     className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"

@@ -73,22 +73,29 @@ export function findAgenciesWithAccounts(data: RegnskabData): AgencyWithAccounts
   })
 }
 
-/** Find regnskabskonti under en node (rekursivt) */
-function findRegnskabskonti(node: RegnskabNode, _data: RegnskabData): RegnskabNode[] {
+/** Find regnskabskonti under en node (rekursivt) - søger i hele træet */
+function findRegnskabskonti(node: RegnskabNode, data: RegnskabData): RegnskabNode[] {
   const result: RegnskabNode[] = []
 
-  function traverse(n: RegnskabNode) {
-    if (n.level === 'regnskabskonto' || n.level === 'regnskabskonto_detalje') {
-      result.push(n)
-    }
-    for (const child of n.children) {
-      traverse(child)
-    }
-  }
+  // Byg prefix-mønster baseret på styrelsens kode (6-cifret hovedkonto)
+  // Vi skal finde alle underkonti (8-cifret) der starter med styrelsens kode
+  const agencyPrefix = node.code // fx "071101"
 
-  // Start fra nodens børn
-  for (const child of node.children) {
-    traverse(child)
+  // Find alle noder i data der matcher
+  for (const n of data.nodes) {
+    // Find underkonti (8-cifret) der hører til denne styrelse
+    if (n.level === 'underkonto' && n.code.startsWith(agencyPrefix)) {
+      // Find alle regnskabskonti under denne underkonto
+      function collectRegnskabskonti(underkontoNode: RegnskabNode) {
+        for (const child of underkontoNode.children) {
+          if (child.level === 'regnskabskonto' || child.level === 'regnskabskonto_detalje') {
+            result.push(child)
+          }
+          collectRegnskabskonti(child)
+        }
+      }
+      collectRegnskabskonti(n)
+    }
   }
 
   return result

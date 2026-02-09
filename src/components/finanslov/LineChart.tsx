@@ -34,6 +34,9 @@ function buildTimeSeries(
     if (!node) continue
 
     // Beregn det faktiske år værdien gælder for
+    // FL 2024 → R2022, B2023, F2024
+    // FL 2025 → R2023, B2024, F2025
+    // FL 2026 → R2024, B2025, F2026
     let actualYear: number
     switch (valueKey) {
       case 'R':
@@ -43,6 +46,7 @@ function buildTimeSeries(
         actualYear = flYear - 1 // B er budget fra forrige FL
         break
       case 'F':
+      default:
         actualYear = flYear // F er finanslovåret selv
         break
     }

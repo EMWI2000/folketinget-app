@@ -226,12 +226,12 @@ function buildTree(parsedLines: ParsedLine[], year: number): RegnskabData {
     }
   }
 
-  // Regnskabsdatabasen: år1 = fil-år - 2, år2 = fil-år - 1
-  // Fx 2024.csv indeholder regnskab 2022 og 2023
+  // Regnskabsdatabasen: Bevilling og faktisk regnskab for filens år
+  // Fx 2024.csv indeholder bevilling og regnskab for 2024
   return {
     year,
-    year1Label: year - 2,
-    year2Label: year - 1,
+    year1Label: 'Bevilling',
+    year2Label: 'Regnskab',
     tree,
     nodes,
     index

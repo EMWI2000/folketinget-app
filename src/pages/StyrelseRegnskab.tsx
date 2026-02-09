@@ -148,43 +148,33 @@ export default function StyrelseRegnskab() {
   }, [selectedAgencies, showYear1])
 
   // Tidsserie data for valgte styrelser
+  // Bruger enten bevilling (year1) eller regnskab (year2) over alle tilgængelige år
   const timeSeriesData = useMemo(() => {
     if (selectedAgencies.length === 0 || !allData.data) return []
 
     return selectedAgencies.map(({ agency, color }) => {
       const points: { year: number; value: number; source: string }[] = []
 
-      // Saml data fra alle filer
+      // Saml data fra alle filer - brug den valgte kolonne (bevilling eller regnskab)
       for (const [fileYear, data] of allData.data!) {
         const node = data.index[agency.agency.code]
         if (!node) continue
 
-        // Year1 og year2 har forskellige faktiske år
+        // År = filens år, værdi = bevilling eller regnskab baseret på showYear1
         points.push({
-          year: data.year1Label,
-          value: node.values.year1,
-          source: `Fil ${fileYear} kol. 1`,
+          year: fileYear,
+          value: showYear1 ? node.values.year1 : node.values.year2,
+          source: `${showYear1 ? 'Bevilling' : 'Regnskab'} ${fileYear}`,
         })
-        points.push({
-          year: data.year2Label,
-          value: node.values.year2,
-          source: `Fil ${fileYear} kol. 2`,
-        })
-      }
-
-      // Fjern dubletter (behold den nyeste kilde per år)
-      const byYear = new Map<number, { year: number; value: number; source: string }>()
-      for (const p of points) {
-        byYear.set(p.year, p) // Senere entries overskriver tidligere
       }
 
       return {
         agency: agency.agency.name,
         color,
-        points: Array.from(byYear.values()).sort((a, b) => a.year - b.year),
+        points: points.sort((a, b) => a.year - b.year),
       }
     })
-  }, [selectedAgencies, allData.data])
+  }, [selectedAgencies, allData.data, showYear1])
 
   return (
     <div>
@@ -203,7 +193,7 @@ export default function StyrelseRegnskab() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* År1/År2-vælger */}
+          {/* Bevilling/Regnskab-vælger */}
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
             <button
               onClick={() => setShowYear1(true)}
@@ -213,7 +203,7 @@ export default function StyrelseRegnskab() {
                   : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
               }`}
             >
-              {currentYearData?.year1Label ?? 'År 1'}
+              Bevilling
             </button>
             <button
               onClick={() => setShowYear1(false)}
@@ -223,7 +213,7 @@ export default function StyrelseRegnskab() {
                   : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
               }`}
             >
-              {currentYearData?.year2Label ?? 'År 2'}
+              Regnskab
             </button>
           </div>
 
@@ -358,7 +348,7 @@ export default function StyrelseRegnskab() {
                 {/* Total sammenligning */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Total (Regnskab {showYear1 ? currentYearData?.year1Label : currentYearData?.year2Label})
+                    Total ({showYear1 ? 'Bevilling' : 'Regnskab'} {selectedYear})
                   </h3>
                   <div className="space-y-3">
                     {[...selectedAgencies]
@@ -398,7 +388,7 @@ export default function StyrelseRegnskab() {
                 {timeSeriesData.length > 0 && timeSeriesData[0].points.length > 1 && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Udvikling over tid (Regnskab)
+                      Udvikling over tid ({showYear1 ? 'Bevilling' : 'Regnskab'})
                     </h3>
                     <TimeSeriesChart data={timeSeriesData} />
                   </div>
@@ -411,7 +401,7 @@ export default function StyrelseRegnskab() {
                       <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Regnskabskonto-sammenligning
                         <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-                          (baseret på Regnskab {selectedYear}, {showYear1 ? currentYearData?.year1Label : currentYearData?.year2Label})
+                          ({showYear1 ? 'Bevilling' : 'Regnskab'} {selectedYear})
                         </span>
                       </h3>
                       {/* Filter på regnskabskonto */}
