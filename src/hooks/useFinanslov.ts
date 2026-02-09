@@ -1,9 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { parseFinanslovCSV, parseAllFinanslov } from '../lib/finanslov/parser'
+import { parseFinanslovCSV, parseAllFinanslov, fetchAvailableYears } from '../lib/finanslov/parser'
 import type { FinanslovData } from '../lib/finanslov/types'
 
+/** Hook til at hente tilgængelige finanslovsår */
+export function useAvailableYears() {
+  return useQuery({
+    queryKey: ['finanslov', 'years'],
+    queryFn: fetchAvailableYears,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+  })
+}
+
 /** Hook til at hente finanslovsdata for et enkelt år */
-export function useFinanslov(year: 2024 | 2025 | 2026) {
+export function useFinanslov(year: number) {
   return useQuery({
     queryKey: ['finanslov', year],
     queryFn: () => parseFinanslovCSV(year),
@@ -12,7 +22,7 @@ export function useFinanslov(year: 2024 | 2025 | 2026) {
   })
 }
 
-/** Hook til at hente finanslovsdata for alle tre år */
+/** Hook til at hente finanslovsdata for alle tilgængelige år */
 export function useAllFinanslov() {
   return useQuery({
     queryKey: ['finanslov', 'all'],

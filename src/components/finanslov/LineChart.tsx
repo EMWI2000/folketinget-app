@@ -1,15 +1,66 @@
 import { useMemo, useState } from 'react'
-import type { CompareItem, FinanslovData } from '../../lib/finanslov/types'
+import type { CompareItem, FinanslovData, ValueKey } from '../../lib/finanslov/types'
 import { formatBudgetCompact } from '../../lib/finanslov/formatter'
 
 interface LineChartProps {
   items: CompareItem[]
   allData: Map<number, FinanslovData>
-  valueKey?: 'F' | 'R' | 'B' | 'BO1' | 'BO2' | 'BO3'
+  valueKey?: ValueKey
   title?: string
 }
 
-const YEARS = [2024, 2025, 2026]
+/**
+ * Byg tidsserie baseret på valueKey:
+ * - R: Regnskabstal (Y-2 fra hver finanslov)
+ * - F: Finanslovbevilling (Y fra hver finanslov)
+ * - B: Budget (Y-1 fra hver finanslov)
+ *
+ * FL 2024 → R2022, B2023, F2024
+ * FL 2025 → R2023, B2024, F2025
+ * FL 2026 → R2024, B2025, F2026
+ */
+function buildTimeSeries(
+  code: string,
+  allData: Map<number, FinanslovData>,
+  valueKey: ValueKey
+): { year: number; value: number; source: string }[] {
+  const flYears = Array.from(allData.keys()).sort()
+  const points: { year: number; value: number; source: string }[] = []
+
+  for (const flYear of flYears) {
+    const data = allData.get(flYear)
+    const node = data?.index[code]
+    if (!node) continue
+
+    // Beregn det faktiske år værdien gælder for
+    let actualYear: number
+    switch (valueKey) {
+      case 'R':
+        actualYear = flYear - 2 // R er regnskab Y-2
+        break
+      case 'B':
+        actualYear = flYear - 1 // B er budget fra forrige FL
+        break
+      case 'F':
+        actualYear = flYear // F er finanslovåret selv
+        break
+    }
+
+    points.push({
+      year: actualYear,
+      value: node.values[valueKey],
+      source: `FL ${flYear}`,
+    })
+  }
+
+  // Sorter og fjern dubletter (behold nyeste kilde)
+  const byYear = new Map<number, { year: number; value: number; source: string }>()
+  for (const point of points) {
+    byYear.set(point.year, point)
+  }
+
+  return Array.from(byYear.values()).sort((a, b) => a.year - b.year)
+}
 
 export default function LineChart({
   items,
@@ -21,24 +72,29 @@ export default function LineChart({
     item: CompareItem
     year: number
     value: number
+    source: string
     x: number
     y: number
   } | null>(null)
 
-  // Byg datalinjer for hvert item
+  // Byg datalinjer for hvert item med rigtig tidsserie
   const lines = useMemo(() => {
     return items.map((item) => {
-      const points = YEARS.map((year) => {
-        const yearData = allData.get(year)
-        const node = yearData?.index[item.node.code]
-        return {
-          year,
-          value: node?.values[valueKey] ?? 0,
-        }
-      })
+      const points = buildTimeSeries(item.node.code, allData, valueKey)
       return { item, points }
     })
   }, [items, allData, valueKey])
+
+  // Find alle unikke år på tværs af alle linjer
+  const allYears = useMemo(() => {
+    const years = new Set<number>()
+    for (const line of lines) {
+      for (const point of line.points) {
+        years.add(point.year)
+      }
+    }
+    return Array.from(years).sort()
+  }, [lines])
 
   // Find min/max for skala
   const { minValue, maxValue } = useMemo(() => {
@@ -65,9 +121,14 @@ export default function LineChart({
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
 
+  // Beregn år-range for X-akse
+  const minYear = allYears.length > 0 ? Math.min(...allYears) : 2022
+  const maxYear = allYears.length > 0 ? Math.max(...allYears) : 2026
+  const yearRange = maxYear - minYear || 1
+
   // Skala-funktioner
   const xScale = (year: number) =>
-    padding.left + ((year - 2024) / 2) * chartWidth
+    padding.left + ((year - minYear) / yearRange) * chartWidth
   const yScale = (value: number) =>
     padding.top + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight
 
@@ -125,7 +186,7 @@ export default function LineChart({
           ))}
 
           {/* X-akse labels */}
-          {YEARS.map((year) => (
+          {allYears.map((year) => (
             <text
               key={year}
               x={xScale(year)}
@@ -172,6 +233,7 @@ export default function LineChart({
                         item: line.item,
                         year: p.year,
                         value: p.value,
+                        source: p.source,
                         x: rect.left + rect.width / 2,
                         y: rect.top,
                       })
@@ -197,6 +259,9 @@ export default function LineChart({
             <div className="font-medium">{hoveredPoint.item.node.name}</div>
             <div className="text-gray-300">
               {hoveredPoint.year}: {formatBudgetCompact(hoveredPoint.value)}
+            </div>
+            <div className="text-gray-400 text-[10px]">
+              Kilde: {hoveredPoint.source}
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
-import { useAllFinanslov, useFinanslovSearch } from '../hooks/useFinanslov'
-import type { BudgetNode, CompareItem, HierarchyLevel } from '../lib/finanslov/types'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useAllFinanslov, useFinanslovSearch, useAvailableYears } from '../hooks/useFinanslov'
+import type { BudgetNode, CompareItem, HierarchyLevel, ValueKey } from '../lib/finanslov/types'
 import { COMPARE_COLORS } from '../lib/finanslov/types'
 import { exportComparisonCSV, exportYearCSV } from '../lib/finanslov/export'
 import BudgetTree from '../components/finanslov/BudgetTree'
@@ -10,17 +10,27 @@ import BudgetBar from '../components/finanslov/BudgetBar'
 import Treemap from '../components/finanslov/Treemap'
 
 export default function Finanslov() {
-  // Hent alle tre års data
+  // Hent tilgængelige år og alle data
+  const availableYears = useAvailableYears()
   const allData = useAllFinanslov()
 
   // UI state
-  const [selectedYear, setSelectedYear] = useState<2024 | 2025 | 2026>(2026)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
   const [compareItems, setCompareItems] = useState<CompareItem[]>([])
+  const [valueKey, setValueKey] = useState<ValueKey>('F')
+
+  // Sæt default år når data er indlæst
+  useEffect(() => {
+    if (availableYears.data && availableYears.data.length > 0 && selectedYear === null) {
+      // Vælg det nyeste år som default
+      setSelectedYear(Math.max(...availableYears.data))
+    }
+  }, [availableYears.data, selectedYear])
 
   // Nuværende års data
-  const currentYearData = allData.data?.get(selectedYear)
+  const currentYearData = selectedYear !== null ? allData.data?.get(selectedYear) : undefined
 
   // Søgefiltreret træ
   const filteredTree = useFinanslovSearch(currentYearData, searchTerm)
@@ -68,50 +78,70 @@ export default function Finanslov() {
   }, [compareItems])
 
   const handleExportYear = useCallback(() => {
-    if (currentYearData) {
+    if (currentYearData && selectedYear !== null) {
       exportYearCSV(currentYearData.nodes, selectedYear)
     }
   }, [currentYearData, selectedYear])
 
-  // Stats
+  // Stats - baseret på valgt valueKey
   const stats = useMemo(() => {
     if (!currentYearData) return null
 
     const paragraphs = currentYearData.tree.filter((n) => n.level === 'paragraf')
-    const totalF = paragraphs.reduce((sum, n) => sum + n.values.F, 0)
-    const totalPositive = paragraphs.filter((n) => n.values.F > 0).reduce((sum, n) => sum + n.values.F, 0)
-    const totalNegative = paragraphs.filter((n) => n.values.F < 0).reduce((sum, n) => sum + n.values.F, 0)
+    const total = paragraphs.reduce((sum, n) => sum + n.values[valueKey], 0)
+    const totalPositive = paragraphs.filter((n) => n.values[valueKey] > 0).reduce((sum, n) => sum + n.values[valueKey], 0)
+    const totalNegative = paragraphs.filter((n) => n.values[valueKey] < 0).reduce((sum, n) => sum + n.values[valueKey], 0)
 
     return {
-      totalF,
+      total,
       totalPositive,
       totalNegative,
-      ministryCount: paragraphs.filter((n) => n.values.F !== 0).length,
+      ministryCount: paragraphs.filter((n) => n.values[valueKey] !== 0).length,
       accountCount: currentYearData.nodes.length,
     }
-  }, [currentYearData])
+  }, [currentYearData, valueKey])
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Finansloven</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Data fra Finanslovsdatabasen</h2>
           <p className="text-gray-600 dark:text-gray-400">
             Udforsk det danske statsbudget. Træk konti til højre for at sammenligne.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* R/F/B-vælger */}
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            {(['R', 'F', 'B'] as const).map((key) => (
+              <button
+                key={key}
+                onClick={() => setValueKey(key)}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  valueKey === key
+                    ? 'bg-ft-red text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                }`}
+                title={key === 'R' ? 'Regnskab' : key === 'F' ? 'Finanslov' : 'Budget'}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+
           {/* År-vælger */}
           <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value) as 2024 | 2025 | 2026)}
+            value={selectedYear ?? ''}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
             className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
           >
-            <option value={2024}>FL 2024</option>
-            <option value={2025}>FL 2025</option>
-            <option value={2026}>FL 2026</option>
+            {availableYears.data?.map((year) => (
+              <option key={year} value={year}>
+                FL {year}
+              </option>
+            ))}
           </select>
 
           {/* Eksport dropdown */}
@@ -220,12 +250,12 @@ export default function Finanslov() {
               <LineChart
                 items={compareItems}
                 allData={allData.data ?? new Map()}
-                valueKey="F"
-                title="Bevilling over tid (F)"
+                valueKey={valueKey}
+                title={`Tidsserie (${valueKey})`}
               />
 
               {/* Søjlediagram */}
-              <BudgetBar items={compareItems} valueKey="F" title="Sammenligning" />
+              <BudgetBar items={compareItems} valueKey={valueKey} title="Sammenligning" />
             </div>
 
             {/* Treemap */}

@@ -21,6 +21,11 @@ export function formatBudgetValue(value: number): string {
   return `${formatted} mio. kr.`
 }
 
+/** Formatér budget (simpel, uden enhed) */
+export function formatBudget(value: number): string {
+  return formatDanishNumber(value, 1)
+}
+
 /** Formatér budgetværdi kompakt (f.eks. "1,2 mia." eller "234 mio.") */
 export function formatBudgetCompact(value: number): string {
   const abs = Math.abs(value)

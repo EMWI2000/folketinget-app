@@ -165,8 +165,23 @@ function buildTree(parsedLines: ParsedLine[], year: number): FinanslovData {
   return { year, tree, nodes, index }
 }
 
+/** Hent manifest med tilgængelige år */
+async function fetchManifest(): Promise<number[]> {
+  try {
+    const response = await fetch('/Finanslovsdatabasen/manifest.json')
+    if (!response.ok) {
+      // Fallback hvis manifest ikke findes
+      return [2024, 2025, 2026]
+    }
+    const manifest = await response.json()
+    return manifest.years as number[]
+  } catch {
+    return [2024, 2025, 2026]
+  }
+}
+
 /** Hent og parse finanslovs-CSV for et givet år */
-export async function parseFinanslovCSV(year: 2024 | 2025 | 2026): Promise<FinanslovData> {
+export async function parseFinanslovCSV(year: number): Promise<FinanslovData> {
   // Hent CSV-filen fra public-mappen
   const response = await fetch(`/Finanslovsdatabasen/${year}.csv`)
   if (!response.ok) {
@@ -183,9 +198,14 @@ export async function parseFinanslovCSV(year: 2024 | 2025 | 2026): Promise<Finan
   return buildTree(parsedLines, year)
 }
 
-/** Parse alle tre år og kombiner */
+/** Hent tilgængelige år fra manifest */
+export async function fetchAvailableYears(): Promise<number[]> {
+  return fetchManifest()
+}
+
+/** Parse alle tilgængelige år og kombiner */
 export async function parseAllFinanslov(): Promise<Map<number, FinanslovData>> {
-  const years: (2024 | 2025 | 2026)[] = [2024, 2025, 2026]
+  const years = await fetchManifest()
   const results = await Promise.all(years.map(parseFinanslovCSV))
 
   const map = new Map<number, FinanslovData>()

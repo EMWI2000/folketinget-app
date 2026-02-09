@@ -8,6 +8,7 @@ import Statistik from './pages/Statistik'
 import Aktstykker from './pages/Aktstykker'
 import Medlem from './pages/Medlem'
 import Finanslov from './pages/Finanslov'
+import Styrelsesbenchmark from './pages/Styrelsesbenchmark'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/aktstykker" element={<Aktstykker />} />
             <Route path="/medlem" element={<Medlem />} />
             <Route path="/finanslov" element={<Finanslov />} />
+            <Route path="/styrelser" element={<Styrelsesbenchmark />} />
           </Routes>
         </Layout>
       </BrowserRouter>

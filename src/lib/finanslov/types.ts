@@ -8,6 +8,16 @@ export interface BudgetValues {
   BO3: number     // Budgetoverslag Y+3
 }
 
+/** Nøgler til værdikolonner */
+export type ValueKey = 'R' | 'B' | 'F'
+
+/** Labels til værdityper */
+export const VALUE_KEY_LABELS: Record<ValueKey, string> = {
+  R: 'Regnskab (R)',
+  B: 'Budget (B)',
+  F: 'Finanslov (F)',
+}
+
 /** Hierarkiniveauer i kontoplanen */
 export type HierarchyLevel =
   | 'paragraf'          // 2-cifret (ministerium)
