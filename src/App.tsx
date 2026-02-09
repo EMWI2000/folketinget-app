@@ -7,6 +7,7 @@ import SagSide from './pages/SagSide'
 import Statistik from './pages/Statistik'
 import Aktstykker from './pages/Aktstykker'
 import Medlem from './pages/Medlem'
+import Finanslov from './pages/Finanslov'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/statistik" element={<Statistik />} />
             <Route path="/aktstykker" element={<Aktstykker />} />
             <Route path="/medlem" element={<Medlem />} />
+            <Route path="/finanslov" element={<Finanslov />} />
           </Routes>
         </Layout>
       </BrowserRouter>
