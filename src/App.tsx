@@ -9,6 +9,8 @@ import Aktstykker from './pages/Aktstykker'
 import Medlem from './pages/Medlem'
 import Finanslov from './pages/Finanslov'
 import Styrelsesbenchmark from './pages/Styrelsesbenchmark'
+import Regnskab from './pages/Regnskab'
+import StyrelseRegnskab from './pages/StyrelseRegnskab'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +35,8 @@ export default function App() {
             <Route path="/medlem" element={<Medlem />} />
             <Route path="/finanslov" element={<Finanslov />} />
             <Route path="/styrelser" element={<Styrelsesbenchmark />} />
+            <Route path="/regnskab" element={<Regnskab />} />
+            <Route path="/styrelser-regnskab" element={<StyrelseRegnskab />} />
           </Routes>
         </Layout>
       </BrowserRouter>

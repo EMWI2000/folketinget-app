@@ -19,7 +19,7 @@ export default function Finanslov() {
   const [searchTerm, setSearchTerm] = useState('')
   const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
   const [compareItems, setCompareItems] = useState<CompareItem[]>([])
-  const [valueKey, setValueKey] = useState<ValueKey>('F')
+  const [valueKey, setValueKey] = useState<ValueKey>('R')
 
   // Sæt default år når data er indlæst
   useEffect(() => {
@@ -113,9 +113,9 @@ export default function Finanslov() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* R/F/B-vælger */}
+          {/* R/B-vælger (uden F - foreløbigt finanslov bruges ikke) */}
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-            {(['R', 'F', 'B'] as const).map((key) => (
+            {(['R', 'B'] as const).map((key) => (
               <button
                 key={key}
                 onClick={() => setValueKey(key)}
@@ -124,7 +124,7 @@ export default function Finanslov() {
                     ? 'bg-ft-red text-white'
                     : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                 }`}
-                title={key === 'R' ? 'Regnskab' : key === 'F' ? 'Finanslov' : 'Budget'}
+                title={key === 'R' ? 'Regnskab' : 'Budget'}
               >
                 {key}
               </button>

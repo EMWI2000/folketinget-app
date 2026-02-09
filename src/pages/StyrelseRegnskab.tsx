@@ -1,9 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useAllFinanslov, useAvailableYears } from '../hooks/useFinanslov'
-import { findAgenciesWithAccounts, STANDARDKONTO_CATEGORIES, type AgencyWithAccounts } from '../lib/finanslov/agencies'
-import { formatBudgetCompact, formatBudget } from '../lib/finanslov/formatter'
-import type { ValueKey } from '../lib/finanslov/types'
-import { VALUE_KEY_LABELS } from '../lib/finanslov/types'
+import { useAllRegnskab, useAvailableRegnskabYears } from '../hooks/useRegnskab'
+import { findAgenciesWithAccounts, REGNSKABSKONTO_CATEGORIES, type AgencyWithAccounts } from '../lib/regnskab/agencies'
+import { formatRegnskabCompact, formatRegnskab } from '../lib/regnskab/formatter'
 
 interface SelectedAgency {
   agency: AgencyWithAccounts
@@ -19,16 +17,16 @@ const COMPARE_COLORS = [
   '#db2777', // pink-600
 ]
 
-export default function Styrelsesbenchmark() {
-  const availableYears = useAvailableYears()
-  const allData = useAllFinanslov()
+export default function StyrelseRegnskab() {
+  const availableYears = useAvailableRegnskabYears()
+  const allData = useAllRegnskab()
 
   // State
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [valueKey, setValueKey] = useState<ValueKey>('R')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedAgencies, setSelectedAgencies] = useState<SelectedAgency[]>([])
   const [sortBy, setSortBy] = useState<'name' | 'total' | 'ministry'>('total')
+  const [showYear1, setShowYear1] = useState(true) // Vis første eller anden kolonne
 
   // Sæt default år
   useEffect(() => {
@@ -62,12 +60,14 @@ export default function Styrelsesbenchmark() {
     }
 
     // Sortering
+    const getValue = (a: AgencyWithAccounts) => showYear1 ? a.agency.values.year1 : a.agency.values.year2
+
     switch (sortBy) {
       case 'name':
         result = [...result].sort((a, b) => a.agency.name.localeCompare(b.agency.name, 'da'))
         break
       case 'total':
-        result = [...result].sort((a, b) => Math.abs(b.agency.values[valueKey]) - Math.abs(a.agency.values[valueKey]))
+        result = [...result].sort((a, b) => Math.abs(getValue(b)) - Math.abs(getValue(a)))
         break
       case 'ministry':
         result = [...result].sort((a, b) => {
@@ -79,7 +79,7 @@ export default function Styrelsesbenchmark() {
     }
 
     return result
-  }, [agencies, searchTerm, sortBy, valueKey])
+  }, [agencies, searchTerm, sortBy, showYear1])
 
   // Toggle styrelse-valg
   const toggleAgency = (agency: AgencyWithAccounts) => {
@@ -100,15 +100,18 @@ export default function Styrelsesbenchmark() {
   const isSelected = (agency: AgencyWithAccounts) =>
     selectedAgencies.some((s) => s.agency.agency.code === agency.agency.code)
 
-  // Standardkonto aggregering for valgte styrelser
-  const standardkontoComparison = useMemo(() => {
+  // Regnskabskonto aggregering for valgte styrelser
+  const regnskabskontoComparison = useMemo(() => {
     if (selectedAgencies.length === 0) return []
 
-    // Find alle unikke standardkonto-koder
+    // Find alle unikke regnskabskonto-koder (2-cifret)
     const allCodes = new Set<string>()
     for (const { agency } of selectedAgencies) {
-      for (const konto of agency.standardkonti) {
-        allCodes.add(konto.code)
+      for (const konto of agency.regnskabskonti) {
+        // Brug kun 2-cifrede koder for overblik
+        if (konto.code.length === 2) {
+          allCodes.add(konto.code)
+        }
       }
     }
 
@@ -116,69 +119,76 @@ export default function Styrelsesbenchmark() {
     return Array.from(allCodes)
       .map((code) => {
         const values = selectedAgencies.map(({ agency, color }) => {
-          const konto = agency.standardkonti.find((k) => k.code === code)
+          // Sum alle regnskabskonti med denne kode
+          const matchingKonti = agency.regnskabskonti.filter((k) => k.code === code)
+          const totalYear1 = matchingKonti.reduce((sum, k) => sum + k.values.year1, 0)
+          const totalYear2 = matchingKonti.reduce((sum, k) => sum + k.values.year2, 0)
+
           return {
             agencyName: agency.agency.name,
             color,
-            value: konto?.values[valueKey] ?? 0,
+            valueYear1: totalYear1,
+            valueYear2: totalYear2,
           }
         })
-        const name = STANDARDKONTO_CATEGORIES[code] || selectedAgencies[0].agency.standardkonti.find((k) => k.code === code)?.name || `Standardkonto ${code}`
+        const name = REGNSKABSKONTO_CATEGORIES[code] || `Regnskabskonto ${code}`
         return { code, name, values }
       })
-      .filter((row) => row.values.some((v) => v.value !== 0))
+      .filter((row) => row.values.some((v) => v.valueYear1 !== 0 || v.valueYear2 !== 0))
       .sort((a, b) => {
-        const aMax = Math.max(...a.values.map((v) => Math.abs(v.value)))
-        const bMax = Math.max(...b.values.map((v) => Math.abs(v.value)))
+        const aMax = Math.max(...a.values.map((v) => Math.abs(showYear1 ? v.valueYear1 : v.valueYear2)))
+        const bMax = Math.max(...b.values.map((v) => Math.abs(showYear1 ? v.valueYear1 : v.valueYear2)))
         return bMax - aMax
       })
-  }, [selectedAgencies, valueKey])
+  }, [selectedAgencies, showYear1])
 
   // Tidsserie data for valgte styrelser
   const timeSeriesData = useMemo(() => {
     if (selectedAgencies.length === 0 || !allData.data) return []
 
     return selectedAgencies.map(({ agency, color }) => {
-      const points = Array.from(allData.data!.entries())
-        .map(([year, data]) => {
-          const node = data.index[agency.agency.code]
-          if (!node) return null
+      const points: { year: number; value: number; source: string }[] = []
 
-          // Beregn faktisk år baseret på valueKey
-          let actualYear: number
-          switch (valueKey) {
-            case 'R':
-              actualYear = year - 2
-              break
-            case 'B':
-              actualYear = year - 1
-              break
-            case 'F':
-              actualYear = year
-              break
-          }
+      // Saml data fra alle filer
+      for (const [fileYear, data] of allData.data!) {
+        const node = data.index[agency.agency.code]
+        if (!node) continue
 
-          return {
-            year: actualYear,
-            value: node.values[valueKey],
-            source: `FL ${year}`,
-          }
+        // Year1 og year2 har forskellige faktiske år
+        points.push({
+          year: data.year1Label,
+          value: node.values.year1,
+          source: `Fil ${fileYear} kol. 1`,
         })
-        .filter((p): p is NonNullable<typeof p> => p !== null)
-        .sort((a, b) => a.year - b.year)
+        points.push({
+          year: data.year2Label,
+          value: node.values.year2,
+          source: `Fil ${fileYear} kol. 2`,
+        })
+      }
 
-      return { agency: agency.agency.name, color, points }
+      // Fjern dubletter (behold den nyeste kilde per år)
+      const byYear = new Map<number, { year: number; value: number; source: string }>()
+      for (const p of points) {
+        byYear.set(p.year, p) // Senere entries overskriver tidligere
+      }
+
+      return {
+        agency: agency.agency.name,
+        color,
+        points: Array.from(byYear.values()).sort((a, b) => a.year - b.year),
+      }
     })
-  }, [selectedAgencies, allData.data, valueKey])
+  }, [selectedAgencies, allData.data])
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Styrelsesbenchmark</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Styrelser (Regnskab)</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Sammenlign styrelser på udgifter og standardkonti.
+            Sammenlign styrelser baseret på regnskabsdata.
             {agencies.length > 0 && (
               <span className="ml-2 text-sm">
                 ({agencies.length} styrelser fundet)
@@ -188,22 +198,28 @@ export default function Styrelsesbenchmark() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* R/B-vælger (uden F - foreløbigt finanslov bruges ikke) */}
+          {/* År1/År2-vælger */}
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-            {(['R', 'B'] as const).map((key) => (
-              <button
-                key={key}
-                onClick={() => setValueKey(key)}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  valueKey === key
-                    ? 'bg-ft-red text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }`}
-                title={VALUE_KEY_LABELS[key]}
-              >
-                {key}
-              </button>
-            ))}
+            <button
+              onClick={() => setShowYear1(true)}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                showYear1
+                  ? 'bg-ft-red text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              {currentYearData?.year1Label ?? 'År 1'}
+            </button>
+            <button
+              onClick={() => setShowYear1(false)}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                !showYear1
+                  ? 'bg-ft-red text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              {currentYearData?.year2Label ?? 'År 2'}
+            </button>
           </div>
 
           {/* År-vælger */}
@@ -214,7 +230,7 @@ export default function Styrelsesbenchmark() {
           >
             {availableYears.data?.map((year) => (
               <option key={year} value={year}>
-                FL {year}
+                Regnskab {year}
               </option>
             ))}
           </select>
@@ -261,6 +277,7 @@ export default function Styrelsesbenchmark() {
                 const selectedItem = selectedAgencies.find(
                   (s) => s.agency.agency.code === agency.agency.code
                 )
+                const displayValue = showYear1 ? agency.agency.values.year1 : agency.agency.values.year2
 
                 return (
                   <button
@@ -286,7 +303,7 @@ export default function Styrelsesbenchmark() {
                           {agency.ministry?.name ?? 'Ukendt ministerium'}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-300 font-mono mt-1">
-                          {formatBudget(agency.agency.values[valueKey])} mio. kr.
+                          {formatRegnskab(displayValue)} mio. kr.
                         </div>
                       </div>
                     </div>
@@ -336,23 +353,29 @@ export default function Styrelsesbenchmark() {
                 {/* Total sammenligning */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Total ({VALUE_KEY_LABELS[valueKey]})
+                    Total (Regnskab {showYear1 ? currentYearData?.year1Label : currentYearData?.year2Label})
                   </h3>
                   <div className="space-y-3">
                     {[...selectedAgencies]
-                      .sort((a, b) => Math.abs(b.agency.agency.values[valueKey]) - Math.abs(a.agency.agency.values[valueKey]))
+                      .sort((a, b) => {
+                        const aVal = showYear1 ? a.agency.agency.values.year1 : a.agency.agency.values.year2
+                        const bVal = showYear1 ? b.agency.agency.values.year1 : b.agency.agency.values.year2
+                        return Math.abs(bVal) - Math.abs(aVal)
+                      })
                       .map(({ agency, color }) => {
                         const maxValue = Math.max(
-                          ...selectedAgencies.map((s) => Math.abs(s.agency.agency.values[valueKey]))
+                          ...selectedAgencies.map((s) =>
+                            Math.abs(showYear1 ? s.agency.agency.values.year1 : s.agency.agency.values.year2)
+                          )
                         )
-                        const value = agency.agency.values[valueKey]
+                        const value = showYear1 ? agency.agency.values.year1 : agency.agency.values.year2
                         const width = (Math.abs(value) / maxValue) * 100
 
                         return (
                           <div key={agency.agency.code}>
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-gray-700 dark:text-gray-300 truncate">{agency.agency.name}</span>
-                              <span className="text-gray-600 dark:text-gray-400 font-mono">{formatBudget(value)} mio.</span>
+                              <span className="text-gray-600 dark:text-gray-400 font-mono">{formatRegnskab(value)} mio.</span>
                             </div>
                             <div className="h-6 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                               <div
@@ -370,26 +393,26 @@ export default function Styrelsesbenchmark() {
                 {timeSeriesData.length > 0 && timeSeriesData[0].points.length > 1 && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Udvikling over tid ({VALUE_KEY_LABELS[valueKey]})
+                      Udvikling over tid (Regnskab)
                     </h3>
                     <TimeSeriesChart data={timeSeriesData} />
                   </div>
                 )}
 
-                {/* Standardkonto sammenligning */}
-                {standardkontoComparison.length > 0 && (
+                {/* Regnskabskonto sammenligning */}
+                {regnskabskontoComparison.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Standardkonto-sammenligning
+                      Regnskabskonto-sammenligning
                       <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-                        (baseret på FL {selectedYear}, {VALUE_KEY_LABELS[valueKey]})
+                        (baseret på Regnskab {selectedYear}, {showYear1 ? currentYearData?.year1Label : currentYearData?.year2Label})
                       </span>
                     </h3>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-2 pr-4 text-gray-600 dark:text-gray-400 font-medium">Standardkonto</th>
+                            <th className="text-left py-2 pr-4 text-gray-600 dark:text-gray-400 font-medium">Regnskabskonto</th>
                             {selectedAgencies.map(({ agency, color }) => (
                               <th key={agency.agency.code} className="text-right py-2 px-2 font-medium">
                                 <div className="flex items-center justify-end gap-1">
@@ -403,25 +426,28 @@ export default function Styrelsesbenchmark() {
                           </tr>
                         </thead>
                         <tbody>
-                          {standardkontoComparison.slice(0, 15).map((row) => (
+                          {regnskabskontoComparison.slice(0, 15).map((row) => (
                             <tr key={row.code} className="border-b border-gray-100 dark:border-gray-700">
                               <td className="py-2 pr-4">
                                 <span className="text-gray-500 dark:text-gray-500 font-mono mr-2">{row.code}</span>
                                 <span className="text-gray-700 dark:text-gray-300">{row.name}</span>
                               </td>
-                              {row.values.map((v, i) => (
-                                <td key={i} className="text-right py-2 px-2 font-mono text-gray-600 dark:text-gray-400">
-                                  {v.value !== 0 ? formatBudgetCompact(v.value) : '-'}
-                                </td>
-                              ))}
+                              {row.values.map((v, i) => {
+                                const value = showYear1 ? v.valueYear1 : v.valueYear2
+                                return (
+                                  <td key={i} className="text-right py-2 px-2 font-mono text-gray-600 dark:text-gray-400">
+                                    {value !== 0 ? formatRegnskabCompact(value) : '-'}
+                                  </td>
+                                )
+                              })}
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    {standardkontoComparison.length > 15 && (
+                    {regnskabskontoComparison.length > 15 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Viser top 15 af {standardkontoComparison.length} standardkonti
+                        Viser top 15 af {regnskabskontoComparison.length} regnskabskonti
                       </p>
                     )}
                   </div>
@@ -486,7 +512,7 @@ function TimeSeriesChart({
               dominantBaseline="middle"
               className="text-[10px] fill-gray-500 dark:fill-gray-400"
             >
-              {formatBudgetCompact(val)}
+              {formatRegnskabCompact(val)}
             </text>
           </g>
         )

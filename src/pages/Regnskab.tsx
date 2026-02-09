@@ -1,0 +1,408 @@
+import { useState, useMemo, useEffect } from 'react'
+import { useAllRegnskab, useAvailableRegnskabYears } from '../hooks/useRegnskab'
+import type { RegnskabNode, HierarchyLevel } from '../lib/regnskab/types'
+import { LEVEL_LABELS, COMPARE_COLORS } from '../lib/regnskab/types'
+import { formatRegnskab, formatRegnskabCompact } from '../lib/regnskab/formatter'
+
+interface CompareItem {
+  node: RegnskabNode
+  color: string
+}
+
+export default function Regnskab() {
+  // Hent tilgængelige år og alle data
+  const availableYears = useAvailableRegnskabYears()
+  const allData = useAllRegnskab()
+
+  // UI state
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
+  const [compareItems, setCompareItems] = useState<CompareItem[]>([])
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+
+  // Sæt default år når data er indlæst
+  useEffect(() => {
+    if (availableYears.data && availableYears.data.length > 0 && selectedYear === null) {
+      // Vælg det nyeste år som default
+      setSelectedYear(Math.max(...availableYears.data))
+    }
+  }, [availableYears.data, selectedYear])
+
+  // Nuværende års data
+  const currentYearData = selectedYear !== null ? allData.data?.get(selectedYear) : undefined
+
+  // Filtreret træ baseret på søgning
+  const filteredTree = useMemo(() => {
+    if (!currentYearData) return []
+    if (searchTerm.length < 2) return currentYearData.tree
+
+    const term = searchTerm.toLowerCase()
+    const matchedIds = new Set<string>()
+
+    for (const node of currentYearData.nodes) {
+      if (
+        node.code.toLowerCase().includes(term) ||
+        node.name.toLowerCase().includes(term)
+      ) {
+        matchedIds.add(node.id)
+
+        // Tilføj ancestors
+        let parentCode = node.parentCode
+        while (parentCode) {
+          const parent = currentYearData.index[parentCode]
+          if (parent) {
+            matchedIds.add(parent.id)
+            parentCode = parent.parentCode
+          } else {
+            parentCode = null
+          }
+        }
+      }
+    }
+
+    function filterTree(nodes: RegnskabNode[]): RegnskabNode[] {
+      return nodes
+        .filter(n => matchedIds.has(n.id))
+        .map(n => ({ ...n, children: filterTree(n.children) }))
+    }
+
+    return filterTree(currentYearData.tree)
+  }, [currentYearData, searchTerm])
+
+  // Toggle node expand/collapse
+  const toggleNode = (id: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  // Tilføj til sammenligning
+  const addToCompare = (node: RegnskabNode) => {
+    setCompareItems((prev) => {
+      if (prev.some((item) => item.node.id === node.id)) {
+        return prev
+      }
+      if (prev.length >= COMPARE_COLORS.length) {
+        return prev
+      }
+      const color = COMPARE_COLORS[prev.length]
+      return [...prev, { node, color }]
+    })
+  }
+
+  // Fjern fra sammenligning
+  const removeFromCompare = (index: number) => {
+    setCompareItems((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      return next.map((item, i) => ({ ...item, color: COMPARE_COLORS[i] }))
+    })
+  }
+
+  // Stats
+  const stats = useMemo(() => {
+    if (!currentYearData) return null
+
+    const paragraphs = currentYearData.tree.filter((n) => n.level === 'paragraf')
+    const totalYear1 = paragraphs.reduce((sum, n) => sum + n.values.year1, 0)
+    const totalYear2 = paragraphs.reduce((sum, n) => sum + n.values.year2, 0)
+
+    return {
+      totalYear1,
+      totalYear2,
+      ministryCount: paragraphs.filter((n) => n.values.year1 !== 0 || n.values.year2 !== 0).length,
+      accountCount: currentYearData.nodes.length,
+      year1Label: currentYearData.year1Label,
+      year2Label: currentYearData.year2Label,
+    }
+  }, [currentYearData])
+
+  // Render en node rekursivt
+  const renderNode = (node: RegnskabNode, depth: number) => {
+    const isExpanded = expandedNodes.has(node.id)
+    const hasChildren = node.children.length > 0
+    const isInCompare = compareItems.some((item) => item.node.id === node.id)
+    const compareItem = compareItems.find((item) => item.node.id === node.id)
+
+    // Filter på niveau
+    if (levelFilter && node.level !== levelFilter && !node.children.some(c => c.level === levelFilter)) {
+      return null
+    }
+
+    return (
+      <div key={node.id}>
+        <div
+          className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer ${
+            isInCompare ? 'bg-gray-50 dark:bg-gray-700' : ''
+          }`}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => hasChildren && toggleNode(node.id)}
+        >
+          {/* Expand/collapse ikon */}
+          {hasChildren ? (
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          ) : (
+            <span className="w-4" />
+          )}
+
+          {/* Farve-indikator hvis i sammenligning */}
+          {isInCompare && (
+            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: compareItem?.color }} />
+          )}
+
+          {/* Kode og navn */}
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{node.code}</span>
+          <span className="flex-1 text-sm text-gray-900 dark:text-white truncate">{node.name}</span>
+
+          {/* Værdier */}
+          <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+            {formatRegnskab(node.values.year1)} / {formatRegnskab(node.values.year2)}
+          </span>
+
+          {/* Tilføj-knap */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              addToCompare(node)
+            }}
+            className="p-1 text-gray-400 hover:text-ft-red transition-colors"
+            title="Tilføj til sammenligning"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Børn */}
+        {isExpanded && node.children.map((child) => renderNode(child, depth + 1))}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Data fra Regnskabsdatabasen</h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Udforsk statsregnskabet. Klik på + for at sammenligne konti.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* År-vælger */}
+          <select
+            value={selectedYear ?? ''}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
+          >
+            {availableYears.data?.map((year) => (
+              <option key={year} value={year}>
+                Regnskab {year}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Stats kort */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {formatRegnskabCompact(stats.totalYear1)}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total {stats.year1Label}</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {formatRegnskabCompact(stats.totalYear2)}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total {stats.year2Label}</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.ministryCount}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Ministerier</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {stats.accountCount.toLocaleString('da-DK')}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Konti i alt</div>
+          </div>
+        </div>
+      )}
+
+      {/* Hovedindhold */}
+      {allData.isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-ft-red border-t-transparent rounded-full mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">Indlæser regnskabsdata...</p>
+          </div>
+        </div>
+      ) : allData.error ? (
+        <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-6 rounded-xl">
+          <h3 className="font-semibold mb-2">Kunne ikke indlæse data</h3>
+          <p className="text-sm">{(allData.error as Error).message}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Venstre panel: Træ */}
+          <div className="lg:col-span-5 bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+            {/* Søgefelt og filter */}
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <input
+                type="text"
+                placeholder="Søg konto..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              <div className="flex gap-2 mt-2">
+                <select
+                  value={levelFilter ?? ''}
+                  onChange={(e) => setLevelFilter(e.target.value ? (e.target.value as HierarchyLevel) : null)}
+                  className="flex-1 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1.5"
+                >
+                  <option value="">Alle niveauer</option>
+                  {Object.entries(LEVEL_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Trævisning */}
+            <div className="h-[500px] overflow-y-auto p-2">
+              {filteredTree.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                  {searchTerm.length >= 2 ? 'Ingen resultater fundet' : 'Indlæser regnskabsdata...'}
+                </div>
+              ) : (
+                filteredTree.map((node) => renderNode(node, 0))
+              )}
+            </div>
+
+            {/* År info */}
+            {currentYearData && (
+              <div className="p-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                Viser: {currentYearData.year1Label} / {currentYearData.year2Label} (fra fil {selectedYear})
+              </div>
+            )}
+          </div>
+
+          {/* Højre panel: Sammenligning */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Sammenligningscanvas */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Sammenligning ({compareItems.length}/{COMPARE_COLORS.length})
+              </h3>
+
+              {compareItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <svg className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <p>Klik på + ved en konto for at tilføje til sammenligning.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Valgte elementer */}
+                  <div className="flex flex-wrap gap-2">
+                    {compareItems.map(({ node, color }, index) => (
+                      <div
+                        key={node.id}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full"
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{node.name}</span>
+                        <button
+                          onClick={() => removeFromCompare(index)}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bar chart */}
+                  {currentYearData && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        Sammenligning ({currentYearData.year1Label} / {currentYearData.year2Label})
+                      </h4>
+                      {compareItems.map(({ node, color }) => {
+                        const maxValue = Math.max(
+                          ...compareItems.flatMap(({ node: n }) => [Math.abs(n.values.year1), Math.abs(n.values.year2)])
+                        )
+
+                        return (
+                          <div key={node.id}>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="text-gray-700 dark:text-gray-300 truncate">{node.name}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                                  <div
+                                    className="h-full rounded transition-all"
+                                    style={{
+                                      width: `${(Math.abs(node.values.year1) / maxValue) * 100}%`,
+                                      backgroundColor: color,
+                                    }}
+                                  />
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                  {formatRegnskab(node.values.year1)} mio. ({currentYearData.year1Label})
+                                </div>
+                              </div>
+                              <div>
+                                <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                                  <div
+                                    className="h-full rounded transition-all"
+                                    style={{
+                                      width: `${(Math.abs(node.values.year2) / maxValue) * 100}%`,
+                                      backgroundColor: color,
+                                      opacity: 0.7,
+                                    }}
+                                  />
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                  {formatRegnskab(node.values.year2)} mio. ({currentYearData.year2Label})
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
