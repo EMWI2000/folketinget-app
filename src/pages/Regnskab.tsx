@@ -127,6 +127,35 @@ export default function Regnskab() {
   // Valg mellem bevilling og regnskab
   const [showBevilling, setShowBevilling] = useState(false) // Default: vis regnskab
 
+  // Hjælpefunktion: find sum af regnskabskonto under en given node
+  const findRegnskabskontoSum = useCallback((
+    data: typeof currentYearData,
+    parentCode: string,
+    regnskabskontoCode: string,
+    useYear1: boolean
+  ): number => {
+    if (!data) return 0
+
+    let sum = 0
+    for (const node of data.nodes) {
+      // Find regnskabskonti der matcher filteret og tilhører parent
+      if ((node.level === 'regnskabskonto' || node.level === 'regnskabskonto_detalje') &&
+          node.code.startsWith(regnskabskontoCode)) {
+        // Tjek om denne regnskabskonto tilhører den valgte parent
+        // ID format: "${year}-${underkontoCode}-${code}"
+        const idParts = node.id.split('-')
+        if (idParts.length >= 2) {
+          const underkontoCode = idParts[1]
+          // Underkonto starter med parent-koden (fx "07110110" starter med "07")
+          if (underkontoCode && underkontoCode.startsWith(parentCode)) {
+            sum += useYear1 ? node.values.year1 : node.values.year2
+          }
+        }
+      }
+    }
+    return sum
+  }, [])
+
   // Tidsserie data for valgte elementer
   // Regnskabsdatabasen har bevilling (year1) og faktisk regnskab (year2) per år
   const timeSeriesData = useMemo(() => {
@@ -137,24 +166,34 @@ export default function Regnskab() {
 
       // Saml data fra alle filer - hver fil = et år
       for (const [fileYear, data] of allData.data!) {
-        const foundNode = data.index[node.code]
-        if (!foundNode) continue
+        let value: number
 
-        // Brug bevilling (year1) eller faktisk regnskab (year2)
+        if (regnskabskontoFilter) {
+          // Hvis regnskabskonto-filter er aktivt, summer vi den specifikke konto under denne node
+          value = findRegnskabskontoSum(data, node.code, regnskabskontoFilter, showBevilling)
+        } else {
+          // Ellers bruger vi nodens egen værdi
+          const foundNode = data.index[node.code]
+          if (!foundNode) continue
+          value = showBevilling ? foundNode.values.year1 : foundNode.values.year2
+        }
+
         points.push({
           year: fileYear,
-          value: showBevilling ? foundNode.values.year1 : foundNode.values.year2,
+          value,
         })
       }
 
       return {
-        name: node.name,
+        name: regnskabskontoFilter
+          ? `${node.name} (${regnskabskontoFilter})`
+          : node.name,
         code: node.code,
         color,
         points: points.sort((a, b) => a.year - b.year),
       }
     })
-  }, [compareItems, allData.data, showBevilling])
+  }, [compareItems, allData.data, showBevilling, regnskabskontoFilter, findRegnskabskontoSum])
 
   // Tabeldata - afhænger af timeSeriesData
   const tableData = useMemo(() => {
@@ -566,9 +605,19 @@ export default function Regnskab() {
                     ))}
                   </select>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Regnskabskonti (fx 18, 22, 44) viser udgiftstyper under hver underkonto.
-                </p>
+                {regnskabskontoFilter && compareItems.length > 0 ? (
+                  <p className="text-xs text-ft-red dark:text-red-400">
+                    Tidsserien viser nu kun konto {regnskabskontoFilter} for de valgte områder.
+                  </p>
+                ) : regnskabskontoFilter ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Vælg områder fra træet for at se tidsserie for konto {regnskabskontoFilter}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Vælg en regnskabskonto for at filtrere tidsserien til den specifikke udgiftstype.
+                  </p>
+                )}
               </div>
             )}
           </div>
