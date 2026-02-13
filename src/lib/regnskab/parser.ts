@@ -58,13 +58,14 @@ function parseLine(line: string): ParsedLine | null {
  * VIGTIGT:
  * - Aktivitetsområder starter med "0" (fx "0111", "0211"),
  *   mens regnskabskonti starter med "1-9" (fx "1100", "2200", "4400").
- * - Paragraffer kan starte med ethvert ciffer (fx "07", "25", "38"),
- *   men regnskabskonti forekommer KUN efter en underkonto.
+ * - Paragraffer kan starte med ethvert ciffer (fx "07", "25", "38").
+ * - Vi bruger look-ahead til at skelne: Hvis næste linje er en 3-cifret kode
+ *   der starter med denne 2-cifrede kode, er det en paragraf.
  */
 function determineLevel(
   code: string,
   codeLength: number,
-  _nextCode: string | null, // Beholdt for eventuel fremtidig brug
+  nextCode: string | null,
   lastUnderkontoCode: string | null
 ): HierarchyLevel {
   const firstDigit = code[0]
@@ -99,14 +100,18 @@ function determineLevel(
   }
 
   // 2-cifret: paragraf vs regnskabskonto
-  // Regnskabskonti forekommer KUN efter en underkonto (8-cifret)
-  // Paragraffer kan starte med ethvert ciffer (fx "07", "25", "38")
   if (codeLength === 2) {
-    // Hvis vi er efter en underkonto, er det en regnskabskonto
+    // Look-ahead: Hvis næste kode er 3-cifret og starter med denne kode,
+    // er det en paragraf (fx "02" efterfulgt af "021")
+    if (nextCode && nextCode.length === 3 && nextCode.startsWith(code)) {
+      return 'paragraf'
+    }
+    // Hvis næste kode også er 2-cifret og vi er efter en underkonto,
+    // er det en regnskabskonto
     if (lastUnderkontoCode) {
       return 'regnskabskonto'
     }
-    // Ellers er det en paragraf (ministerium)
+    // Ellers antag paragraf (kan også ske hvis det er sidste linje i en paragraf-sektion)
     return 'paragraf'
   }
 
