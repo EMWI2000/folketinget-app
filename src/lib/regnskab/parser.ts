@@ -55,14 +55,16 @@ function parseLine(line: string): ParsedLine | null {
  * - 6-cifret: hovedkonto
  * - 8-cifret: underkonto
  *
- * VIGTIGT: Aktivitetsområder starter med "0" (fx "0111", "0211"),
- * mens regnskabskonti starter med "1-9" (fx "1100", "2200", "4400").
- * Dette er den primære måde at skelne mellem de to ved 4-cifrede koder.
+ * VIGTIGT:
+ * - Aktivitetsområder starter med "0" (fx "0111", "0211"),
+ *   mens regnskabskonti starter med "1-9" (fx "1100", "2200", "4400").
+ * - Paragraffer kan starte med ethvert ciffer (fx "07", "25", "38"),
+ *   men regnskabskonti forekommer KUN efter en underkonto.
  */
 function determineLevel(
   code: string,
   codeLength: number,
-  nextCode: string | null,
+  _nextCode: string | null, // Beholdt for eventuel fremtidig brug
   lastUnderkontoCode: string | null
 ): HierarchyLevel {
   const firstDigit = code[0]
@@ -96,20 +98,16 @@ function determineLevel(
     return 'hovedomraade'
   }
 
-  // 2-cifret: paragraf (starter med 0) vs regnskabskonto (starter med 1-9)
+  // 2-cifret: paragraf vs regnskabskonto
+  // Regnskabskonti forekommer KUN efter en underkonto (8-cifret)
+  // Paragraffer kan starte med ethvert ciffer (fx "07", "25", "38")
   if (codeLength === 2) {
-    if (startsWithZero) {
-      return 'paragraf'
-    }
-    // Regnskabskonto hovedkategori (fx "11", "18", "22") - kun hvis vi er efter en underkonto
+    // Hvis vi er efter en underkonto, er det en regnskabskonto
     if (lastUnderkontoCode) {
       return 'regnskabskonto'
     }
-    // Hvis ikke efter underkonto, tjek look-ahead
-    if (nextCode && nextCode.length === 3 && nextCode.startsWith(code)) {
-      return 'paragraf'
-    }
-    return 'regnskabskonto'
+    // Ellers er det en paragraf (ministerium)
+    return 'paragraf'
   }
 
   return 'regnskabskonto'
