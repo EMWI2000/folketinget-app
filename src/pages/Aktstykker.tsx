@@ -174,11 +174,17 @@ export default function Aktstykker() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Aktstykker</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">Finansudvalgets bevillinger grupperet efter ministerium</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Bevillingsanmodninger (Aktstykker)</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">Finansudvalgets behandling af ministeriernes bevillingsanmodninger</p>
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-900 dark:text-amber-200">
           <p className="mb-2">
-            <strong>Hvad er aktstykker?</strong> Aktstykker er bevillingsanmodninger fra ministerierne til Folketingets Finansudvalg. Når et ministerium har brug for ekstra bevillinger eller vil omdisponere midler, fremsender de et aktstykke. Finansudvalget godkender (tiltræder) eller afviser dem.
+            <strong>Hvad er aktstykker?</strong> Aktstykker er bevillingsanmodninger fra ministerierne til Folketingets Finansudvalg.
+            Når et ministerium har brug for ekstra bevillinger udover finansloven, eller vil omdisponere midler mellem bevillinger,
+            fremsender de et aktstykke. Finansudvalget godkender (tiltræder) eller afviser dem.
+          </p>
+          <p className="mb-2">
+            <strong>Sammenhæng med Finansloven:</strong> Aktstykker er supplementer til den årlige finanslov.
+            Finansloven fastsætter de overordnede bevillinger, mens aktstykker håndterer ændringer i løbet af året.
           </p>
           <p className="mb-2">
             <strong>Statuskoder:</strong> <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">TU</span> = Tiltrådt enstemmigt</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">TF</span> = Tiltrådt med flertal</span> · <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs font-medium">IK</span> = Ikke tiltrådt</span>
