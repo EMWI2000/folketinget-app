@@ -7,14 +7,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navLinks = [
-    { to: '/', label: 'Dashboard' },
-    { to: '/soeg', label: 'Søg' },
+    { to: '/', label: 'Overblik' },
+    { to: '/soeg', label: 'Søg i sager' },
     { to: '/aktstykker', label: 'Aktstykker' },
-    { to: '/medlem', label: 'Medlem' },
+    { to: '/medlem', label: 'MF-opslag' },
     { to: '/finanslov', label: 'Finanslov' },
-    { to: '/styrelser', label: 'Styrelser (FL)' },
     { to: '/regnskab', label: 'Regnskab' },
-    { to: '/styrelser-regnskab', label: 'Styrelser (R)' },
+    { to: '/styrelser', label: 'Styrelser' },
     { to: '/statistik', label: 'Statistik' },
   ]
 

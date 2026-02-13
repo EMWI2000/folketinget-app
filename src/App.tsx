@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -8,9 +8,8 @@ import Statistik from './pages/Statistik'
 import Aktstykker from './pages/Aktstykker'
 import Medlem from './pages/Medlem'
 import Finanslov from './pages/Finanslov'
-import Styrelsesbenchmark from './pages/Styrelsesbenchmark'
+import Styrelser from './pages/Styrelser'
 import Regnskab from './pages/Regnskab'
-import StyrelseRegnskab from './pages/StyrelseRegnskab'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,9 +33,10 @@ export default function App() {
             <Route path="/aktstykker" element={<Aktstykker />} />
             <Route path="/medlem" element={<Medlem />} />
             <Route path="/finanslov" element={<Finanslov />} />
-            <Route path="/styrelser" element={<Styrelsesbenchmark />} />
+            <Route path="/styrelser" element={<Styrelser />} />
             <Route path="/regnskab" element={<Regnskab />} />
-            <Route path="/styrelser-regnskab" element={<StyrelseRegnskab />} />
+            {/* Redirects fra gamle URLs */}
+            <Route path="/styrelser-regnskab" element={<Navigate to="/styrelser?tab=regnskab" replace />} />
           </Routes>
         </Layout>
       </BrowserRouter>
