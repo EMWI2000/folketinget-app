@@ -40,7 +40,15 @@ export async function fetchSager(opts: {
 } = {}): Promise<ODataResponse<Sag>> {
   const filters: string[] = []
   if (opts.search) {
-    filters.push(`substringof('${opts.search}',titel)`)
+    // Case-insensitiv søgning i flere felter: titel, titelkort, resume, nummerprefix
+    const searchLower = opts.search.toLowerCase()
+    const searchFilters = [
+      `substringof('${searchLower}',tolower(titel))`,
+      `substringof('${searchLower}',tolower(titelkort))`,
+      `substringof('${searchLower}',tolower(resume))`,
+      `substringof('${searchLower}',tolower(nummerprefix))`,
+    ]
+    filters.push(`(${searchFilters.join(' or ')})`)
   }
   if (opts.typeid) {
     filters.push(`typeid eq ${opts.typeid}`)
