@@ -134,9 +134,10 @@ function findParentCode(
     case 'underkonto':
       return code.slice(0, 6) // 07110110 → 071101
     case 'regnskabskonto':
-      return lastUnderkontoCode // Barn af seneste 8-cifrede
+      return lastUnderkontoCode // Barn af seneste 8-cifrede underkonto
     case 'regnskabskonto_detalje':
-      return lastRegnskabskontoCode // Barn af seneste 2-cifrede regnskabskonto
+      // Barn af seneste 2-cifrede regnskabskonto - brug index-nøgle format
+      return lastRegnskabskontoCode // Format: "${underkontoCode}-${regnskabskontoCode}"
     default:
       return null
   }
@@ -178,7 +179,11 @@ function buildTree(parsedLines: ParsedLine[], year: number): RegnskabData {
       lastUnderkontoCode
     )
 
-    // Opdater tracking baseret på niveau
+    // Beregn parentCode FØR vi opdaterer tracking
+    // (så regnskabskonto_detalje kan finde sin parent regnskabskonto)
+    const parentCode = findParentCode(line.code, level, lastUnderkontoCode, lastRegnskabskontoCode)
+
+    // Opdater tracking baseret på niveau EFTER parentCode er beregnet
     if (level === 'underkonto') {
       lastUnderkontoCode = line.code
       lastRegnskabskontoCode = null // Reset regnskabskonto når vi starter ny underkonto
@@ -190,9 +195,7 @@ function buildTree(parsedLines: ParsedLine[], year: number): RegnskabData {
       lastUnderkontoCode = null
       lastRegnskabskontoCode = null
     }
-    // Note: regnskabskonto_detalje nulstiller IKKE lastUnderkontoCode
-
-    const parentCode = findParentCode(line.code, level, lastUnderkontoCode, lastRegnskabskontoCode)
+    // Note: regnskabskonto_detalje nulstiller IKKE lastUnderkontoCode eller lastRegnskabskontoCode
 
     // Generér unikt ID - regnskabskonti får underkonto-prefix for at være unikke
     const uniqueId = level === 'regnskabskonto' || level === 'regnskabskonto_detalje'

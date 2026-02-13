@@ -236,6 +236,19 @@ export default function Regnskab() {
       return null
     }
 
+    // Filter på regnskabskonto - vis kun noder der indeholder den valgte regnskabskonto
+    if (regnskabskontoFilter) {
+      const hasMatchingRegnskabskonto = (n: RegnskabNode): boolean => {
+        if ((n.level === 'regnskabskonto' || n.level === 'regnskabskonto_detalje') && n.code.startsWith(regnskabskontoFilter)) {
+          return true
+        }
+        return n.children.some(hasMatchingRegnskabskonto)
+      }
+      if (!hasMatchingRegnskabskonto(node)) {
+        return null
+      }
+    }
+
     return (
       <div key={node.id}>
         <div
