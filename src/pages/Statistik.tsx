@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useAktstykkerPerMinisterium } from '../hooks/useStatistik'
+import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useAktstykkerPerMinisterium, useAlmDelOpdelt, useLovforslagPerStatus } from '../hooks/useStatistik'
 import { usePerioder } from '../hooks/useAktstykker'
 import { periodeLabel } from '../types/ft'
 import StatKort from '../components/StatKort'
@@ -11,6 +11,17 @@ const COLORS = [
   '#dc2626', '#0891b2', '#4f46e5', '#ca8a04', '#be185d',
   '#16a34a', '#6366f1', '#0d9488', '#ea580c', '#8b5cf6',
 ]
+
+// Farver specifikt til status
+const STATUS_COLORS: Record<string, string> = {
+  'Vedtaget': '#059669',      // grøn
+  'Forkastet': '#dc2626',     // rød
+  'Under behandling': '#2563eb', // blå
+  'Fremsat': '#d97706',       // orange
+  'Bortfaldet': '#6b7280',    // grå
+  'Afsluttet': '#0891b2',     // cyan
+  'Modtaget': '#7c3aed',      // lilla
+}
 
 export default function Statistik() {
   const perioder = usePerioder()
@@ -26,6 +37,8 @@ export default function Statistik() {
   const afstemningerTotal = useAfstemningerTotal()
   const sagerPerType = useSagerPerType(aktivPeriode ?? undefined)
   const aktstykkerPerMinisterium = useAktstykkerPerMinisterium(aktivPeriode)
+  const almDelOpdelt = useAlmDelOpdelt(aktivPeriode ?? undefined)
+  const lovforslagPerStatus = useLovforslagPerStatus(aktivPeriode ?? undefined)
 
   return (
     <div>
@@ -78,9 +91,10 @@ export default function Statistik() {
         />
       </div>
 
-      {/* Bar chart: Sager per type */}
-      {sagerPerType.data && (
-        <div className="mb-8">
+      {/* Gitter med grafer */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Sager per type */}
+        {sagerPerType.data && (
           <BarChart
             title={`Sager fordelt efter type (${aktivLabel})`}
             data={sagerPerType.data.map((d, i) => ({
@@ -89,22 +103,67 @@ export default function Statistik() {
               color: COLORS[i % COLORS.length],
             }))}
           />
-        </div>
-      )}
-      {sagerPerType.isLoading && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 rounded" />
-            ))}
+        )}
+        {sagerPerType.isLoading && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Bar chart: Aktstykker per ministerium */}
-      {aktstykkerPerMinisterium.data && aktstykkerPerMinisterium.data.length > 0 && (
-        <div className="mb-8">
+        {/* Lovforslag per status */}
+        {lovforslagPerStatus.data && lovforslagPerStatus.data.length > 0 && (
+          <BarChart
+            title={`Lovforslag efter status (${aktivLabel})`}
+            data={lovforslagPerStatus.data.map((d) => ({
+              label: d.label,
+              value: d.count,
+              color: STATUS_COLORS[d.label] || COLORS[0],
+            }))}
+          />
+        )}
+        {lovforslagPerStatus.isLoading && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Alm. del opdelt */}
+        {almDelOpdelt.data && almDelOpdelt.data.length > 0 && (
+          <BarChart
+            title={`Alm. del opdelt (${aktivLabel})`}
+            subtitle="Spørgsmål, samråd og andre henvendelser"
+            data={almDelOpdelt.data.map((d, i) => ({
+              label: d.label,
+              value: d.count,
+              color: COLORS[i % COLORS.length],
+            }))}
+          />
+        )}
+        {almDelOpdelt.isLoading && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Aktstykker per ministerium */}
+        {aktstykkerPerMinisterium.data && aktstykkerPerMinisterium.data.length > 0 && (
           <BarChart
             title={`Aktstykker per ministerium (${aktivLabel})`}
             data={aktstykkerPerMinisterium.data.map((d, i) => ({
@@ -113,18 +172,18 @@ export default function Statistik() {
               color: COLORS[i % COLORS.length],
             }))}
           />
-        </div>
-      )}
-      {aktstykkerPerMinisterium.isLoading && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
-          <div className="space-y-3">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-8 bg-gray-100 rounded" />
-            ))}
+        )}
+        {aktstykkerPerMinisterium.isLoading && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
+            <div className="space-y-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
