@@ -27,7 +27,8 @@ export default function StyrelseRegnskab() {
   const [selectedAgencies, setSelectedAgencies] = useState<SelectedAgency[]>([])
   const [sortBy, setSortBy] = useState<'name' | 'total' | 'ministry'>('total')
   const [showYear1, setShowYear1] = useState(true) // Vis første eller anden kolonne
-  const [kontoFilter, setKontoFilter] = useState<string | null>(null) // Filter på regnskabskonto
+  const [kontoFilter, setKontoFilter] = useState<string | null>(null) // Filter på regnskabskonto (2-cifret)
+  const [showDetailLevel, setShowDetailLevel] = useState(false) // Vis 4-cifrede detaljer
 
   // Sæt default år
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function StyrelseRegnskab() {
   const isSelected = (agency: AgencyWithAccounts) =>
     selectedAgencies.some((s) => s.agency.agency.code === agency.agency.code)
 
-  // Regnskabskonto aggregering for valgte styrelser
+  // Regnskabskonto aggregering for valgte styrelser (2-cifrede hovedkategorier)
   const regnskabskontoComparison = useMemo(() => {
     if (selectedAgencies.length === 0) return []
 
@@ -111,7 +112,6 @@ export default function StyrelseRegnskab() {
       for (const konto of agency.regnskabskonti) {
         // Brug kun 2-cifrede koder for overblik
         if (konto.code.length === 2) {
-          // Gem navnet fra data hvis vi ikke allerede har det
           if (!codeToName.has(konto.code)) {
             codeToName.set(konto.code, konto.name)
           }
@@ -123,7 +123,7 @@ export default function StyrelseRegnskab() {
     return Array.from(codeToName.entries())
       .map(([code, dataName]) => {
         const values = selectedAgencies.map(({ agency, color }) => {
-          // Sum alle regnskabskonti med denne kode
+          // Sum alle regnskabskonti med denne kode (2-cifret)
           const matchingKonti = agency.regnskabskonti.filter((k) => k.code === code)
           const totalYear1 = matchingKonti.reduce((sum, k) => sum + k.values.year1, 0)
           const totalYear2 = matchingKonti.reduce((sum, k) => sum + k.values.year2, 0)
@@ -135,9 +135,8 @@ export default function StyrelseRegnskab() {
             valueYear2: totalYear2,
           }
         })
-        // Brug navnet fra data, eller fra kategoriordbog, eller fallback
         const name = dataName || REGNSKABSKONTO_CATEGORIES[code] || `Regnskabskonto ${code}`
-        return { code, name, values }
+        return { code, name, values, isDetail: false }
       })
       .filter((row) => row.values.some((v) => v.valueYear1 !== 0 || v.valueYear2 !== 0))
       .sort((a, b) => {
@@ -146,6 +145,44 @@ export default function StyrelseRegnskab() {
         return bMax - aMax
       })
   }, [selectedAgencies, showYear1])
+
+  // Regnskabskonto detaljer (4-cifrede) - filtreret på valgt 2-cifret hovedkategori
+  const regnskabskontoDetails = useMemo(() => {
+    if (selectedAgencies.length === 0 || !kontoFilter) return []
+
+    // Find alle 4-cifrede koder der starter med det valgte 2-cifrede filter
+    const codeToName = new Map<string, string>()
+    for (const { agency } of selectedAgencies) {
+      for (const konto of agency.regnskabskonti) {
+        // Brug kun 4-cifrede koder der starter med filteret
+        if (konto.code.length === 4 && konto.code.startsWith(kontoFilter)) {
+          if (!codeToName.has(konto.code)) {
+            codeToName.set(konto.code, konto.name)
+          }
+        }
+      }
+    }
+
+    // Byg sammenligning
+    return Array.from(codeToName.entries())
+      .map(([code, dataName]) => {
+        const values = selectedAgencies.map(({ agency, color }) => {
+          const matchingKonti = agency.regnskabskonti.filter((k) => k.code === code)
+          const totalYear1 = matchingKonti.reduce((sum, k) => sum + k.values.year1, 0)
+          const totalYear2 = matchingKonti.reduce((sum, k) => sum + k.values.year2, 0)
+
+          return {
+            agencyName: agency.agency.name,
+            color,
+            valueYear1: totalYear1,
+            valueYear2: totalYear2,
+          }
+        })
+        return { code, name: dataName, values, isDetail: true }
+      })
+      .filter((row) => row.values.some((v) => v.valueYear1 !== 0 || v.valueYear2 !== 0))
+      .sort((a, b) => a.code.localeCompare(b.code))
+  }, [selectedAgencies, kontoFilter, showYear1])
 
   // Tidsserie data for valgte styrelser
   // Bruger enten bevilling (year1) eller regnskab (year2) over alle tilgængelige år
@@ -404,19 +441,37 @@ export default function StyrelseRegnskab() {
                           ({showYear1 ? 'Bevilling' : 'Regnskab'} {selectedYear})
                         </span>
                       </h3>
-                      {/* Filter på regnskabskonto */}
-                      <select
-                        value={kontoFilter ?? ''}
-                        onChange={(e) => setKontoFilter(e.target.value || null)}
-                        className="text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1"
-                      >
-                        <option value="">Alle konti</option>
-                        {regnskabskontoComparison.map((row) => (
-                          <option key={row.code} value={row.code}>
-                            {row.code} - {row.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2">
+                        {/* Filter på regnskabskonto */}
+                        <select
+                          value={kontoFilter ?? ''}
+                          onChange={(e) => {
+                            setKontoFilter(e.target.value || null)
+                            setShowDetailLevel(false)
+                          }}
+                          className="text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1"
+                        >
+                          <option value="">Alle hovedkonti (2-cifret)</option>
+                          {regnskabskontoComparison.map((row) => (
+                            <option key={row.code} value={row.code}>
+                              {row.code} - {row.name}
+                            </option>
+                          ))}
+                        </select>
+                        {/* Toggle for at vise detaljer */}
+                        {kontoFilter && regnskabskontoDetails.length > 0 && (
+                          <button
+                            onClick={() => setShowDetailLevel(!showDetailLevel)}
+                            className={`text-xs px-2 py-1 rounded border transition-colors ${
+                              showDetailLevel
+                                ? 'bg-ft-red text-white border-ft-red'
+                                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            Vis detaljer (4-cifret)
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -436,19 +491,37 @@ export default function StyrelseRegnskab() {
                           </tr>
                         </thead>
                         <tbody>
+                          {/* Vis hovedkonti (2-cifrede) */}
                           {regnskabskontoComparison
                             .filter((row) => !kontoFilter || row.code === kontoFilter)
                             .slice(0, kontoFilter ? 100 : 15)
                             .map((row) => (
-                            <tr key={row.code} className="border-b border-gray-100 dark:border-gray-700">
+                            <tr key={row.code} className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
                               <td className="py-2 pr-4">
-                                <span className="text-gray-500 dark:text-gray-500 font-mono mr-2">{row.code}</span>
-                                <span className="text-gray-700 dark:text-gray-300">{row.name}</span>
+                                <span className="text-gray-500 dark:text-gray-500 font-mono mr-2 font-semibold">{row.code}</span>
+                                <span className="text-gray-700 dark:text-gray-300 font-medium">{row.name}</span>
                               </td>
                               {row.values.map((v, i) => {
                                 const value = showYear1 ? v.valueYear1 : v.valueYear2
                                 return (
-                                  <td key={i} className="text-right py-2 px-2 font-mono text-gray-600 dark:text-gray-400">
+                                  <td key={i} className="text-right py-2 px-2 font-mono text-gray-600 dark:text-gray-400 font-semibold">
+                                    {value !== 0 ? formatRegnskabCompact(value) : '-'}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                          {/* Vis detaljer (4-cifrede) hvis aktiveret */}
+                          {showDetailLevel && regnskabskontoDetails.map((row) => (
+                            <tr key={row.code} className="border-b border-gray-100 dark:border-gray-700">
+                              <td className="py-2 pr-4 pl-4">
+                                <span className="text-gray-400 dark:text-gray-500 font-mono mr-2">{row.code}</span>
+                                <span className="text-gray-600 dark:text-gray-400">{row.name}</span>
+                              </td>
+                              {row.values.map((v, i) => {
+                                const value = showYear1 ? v.valueYear1 : v.valueYear2
+                                return (
+                                  <td key={i} className="text-right py-2 px-2 font-mono text-gray-500 dark:text-gray-500">
                                     {value !== 0 ? formatRegnskabCompact(value) : '-'}
                                   </td>
                                 )
@@ -460,7 +533,12 @@ export default function StyrelseRegnskab() {
                     </div>
                     {!kontoFilter && regnskabskontoComparison.length > 15 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Viser top 15 af {regnskabskontoComparison.length} regnskabskonti
+                        Viser top 15 af {regnskabskontoComparison.length} regnskabskonti. Vælg en hovedkonto for at se detaljer.
+                      </p>
+                    )}
+                    {kontoFilter && regnskabskontoDetails.length > 0 && !showDetailLevel && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        {regnskabskontoDetails.length} detaljerede underkonti tilgængelige. Klik "Vis detaljer" for at se dem.
                       </p>
                     )}
                   </div>

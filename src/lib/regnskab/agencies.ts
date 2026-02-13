@@ -78,23 +78,22 @@ function findRegnskabskonti(node: RegnskabNode, data: RegnskabData): RegnskabNod
   const result: RegnskabNode[] = []
 
   // Byg prefix-mønster baseret på styrelsens kode (6-cifret hovedkonto)
-  // Vi skal finde alle underkonti (8-cifret) der starter med styrelsens kode
-  const agencyPrefix = node.code // fx "071101"
+  const agencyPrefix = node.code // fx "093106"
 
-  // Find alle noder i data der matcher
+  // Find alle noder i data der er regnskabskonti
   for (const n of data.nodes) {
-    // Find underkonti (8-cifret) der hører til denne styrelse
-    if (n.level === 'underkonto' && n.code.startsWith(agencyPrefix)) {
-      // Find alle regnskabskonti under denne underkonto
-      function collectRegnskabskonti(underkontoNode: RegnskabNode) {
-        for (const child of underkontoNode.children) {
-          if (child.level === 'regnskabskonto' || child.level === 'regnskabskonto_detalje') {
-            result.push(child)
-          }
-          collectRegnskabskonti(child)
+    // Tjek om det er en regnskabskonto (2-cifret) eller regnskabskonto_detalje (4-cifret)
+    if (n.level === 'regnskabskonto' || n.level === 'regnskabskonto_detalje') {
+      // Regnskabskonti har id format: ${year}-${underkontoCode}-${code}
+      // Vi tjekker om underkontoen hører til denne styrelse
+      const idParts = n.id.split('-')
+      if (idParts.length >= 3) {
+        // idParts[1] er underkontoCode (8-cifret)
+        const underkontoCode = idParts[1]
+        if (underkontoCode && underkontoCode.startsWith(agencyPrefix)) {
+          result.push(n)
         }
       }
-      collectRegnskabskonti(n)
     }
   }
 
