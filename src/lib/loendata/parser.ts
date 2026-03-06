@@ -1,0 +1,234 @@
+import type { LoenRaekke, LoenFilter, BenchmarkRaekke } from './types'
+
+/**
+ * Parse en CSV-linje med korrekt håndtering af quoted fields.
+ * Felter der indeholder komma er omgivet af dobbelte anførselstegn.
+ */
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"'
+        i++ // skip escaped quote
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      fields.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  fields.push(current.trim())
+  return fields
+}
+
+/** Parse hele CSV-filen til LoenRaekke[] */
+export function parseLoenCSV(content: string): LoenRaekke[] {
+  const lines = content.split(/\r?\n/)
+  const rows: LoenRaekke[] = []
+
+  // Skip header (første linje) og BOM
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const fields = parseCSVLine(line)
+    if (fields.length < 17) continue
+
+    const aarsvaerk = parseFloat(fields[3])
+    if (isNaN(aarsvaerk) || aarsvaerk <= 0) continue
+
+    rows.push({
+      personalekategori: fields[0],
+      stilling: fields[1],
+      loentrin: fields[2],
+      aarsvaerk,
+      basislon: parseFloat(fields[4]) || 0,
+      plustid: parseFloat(fields[5]) || 0,
+      pension: parseFloat(fields[6]) || 0,
+      fasteMidlCentrale: parseFloat(fields[7]) || 0,
+      fasteLokale: parseFloat(fields[8]) || 0,
+      midlertLokale: parseFloat(fields[9]) || 0,
+      engangsvederlag: parseFloat(fields[10]) || 0,
+      andreTillaeg: parseFloat(fields[11]) || 0,
+      samletLon: parseFloat(fields[12]) || 0,
+      periode: fields[13],
+      ministeromraade: fields[14],
+      hovedkonto: fields[15],
+      type: fields[16] as LoenRaekke['type'],
+    })
+  }
+
+  return rows
+}
+
+/** Anvend alle filtre på datasættet */
+export function filtrerData(data: LoenRaekke[], filter: LoenFilter): LoenRaekke[] {
+  return data.filter((r) => {
+    if (filter.perioder.length > 0 && !filter.perioder.includes(r.periode)) return false
+    if (filter.ministeromraader.length > 0 && !filter.ministeromraader.includes(r.ministeromraade)) return false
+    if (filter.hovedkonti.length > 0 && !filter.hovedkonti.includes(r.hovedkonto)) return false
+    if (filter.typer.length > 0 && !filter.typer.includes(r.type)) return false
+    if (filter.personalekategorier.length > 0 && !filter.personalekategorier.includes(r.personalekategori)) return false
+    if (filter.stillinger.length > 0 && !filter.stillinger.includes(r.stilling)) return false
+    if (filter.loentrin.length > 0 && !filter.loentrin.includes(r.loentrin)) return false
+    return true
+  })
+}
+
+/**
+ * Beregn benchmark (vægtet gennemsnit) grupperet efter hovedkonto.
+ *
+ * VIGTIGT: Løntal er gennemsnit pr. årsværk og kan IKKE summeres direkte.
+ * Ved aggregering: vægtet_gns = Σ(løn_i × årsværk_i) / Σ(årsværk_i)
+ * Årsværk kan summeres direkte.
+ */
+export function beregnBenchmark(data: LoenRaekke[]): BenchmarkRaekke[] {
+  // Gruppér efter hovedkonto
+  const grupper = new Map<string, LoenRaekke[]>()
+  for (const r of data) {
+    const key = r.hovedkonto
+    if (!grupper.has(key)) grupper.set(key, [])
+    grupper.get(key)!.push(r)
+  }
+
+  const result: BenchmarkRaekke[] = []
+  for (const [hovedkonto, raekker] of grupper) {
+    const sumAarsvaerk = raekker.reduce((s, r) => s + r.aarsvaerk, 0)
+    if (sumAarsvaerk === 0) continue
+
+    result.push({
+      navn: hovedkonto,
+      aarsvaerk: sumAarsvaerk,
+      samletLon: vaegtetGns(raekker, 'samletLon'),
+      basislon: vaegtetGns(raekker, 'basislon'),
+      plustid: vaegtetGns(raekker, 'plustid'),
+      pension: vaegtetGns(raekker, 'pension'),
+      fasteMidlCentrale: vaegtetGns(raekker, 'fasteMidlCentrale'),
+      fasteLokale: vaegtetGns(raekker, 'fasteLokale'),
+      midlertLokale: vaegtetGns(raekker, 'midlertLokale'),
+      engangsvederlag: vaegtetGns(raekker, 'engangsvederlag'),
+      andreTillaeg: vaegtetGns(raekker, 'andreTillaeg'),
+      type: raekker[0].type,
+      ministeromraade: raekker[0].ministeromraade,
+    })
+  }
+
+  return result.sort((a, b) => b.aarsvaerk - a.aarsvaerk)
+}
+
+/**
+ * Beregn benchmark grupperet efter hovedkonto OG periode (til tidsserier).
+ */
+export function beregnBenchmarkPerPeriode(data: LoenRaekke[]): BenchmarkRaekke[] {
+  const grupper = new Map<string, LoenRaekke[]>()
+  for (const r of data) {
+    const key = `${r.hovedkonto}||${r.periode}`
+    if (!grupper.has(key)) grupper.set(key, [])
+    grupper.get(key)!.push(r)
+  }
+
+  const result: BenchmarkRaekke[] = []
+  for (const [, raekker] of grupper) {
+    const sumAarsvaerk = raekker.reduce((s, r) => s + r.aarsvaerk, 0)
+    if (sumAarsvaerk === 0) continue
+
+    result.push({
+      navn: raekker[0].hovedkonto,
+      aarsvaerk: sumAarsvaerk,
+      samletLon: vaegtetGns(raekker, 'samletLon'),
+      basislon: vaegtetGns(raekker, 'basislon'),
+      plustid: vaegtetGns(raekker, 'plustid'),
+      pension: vaegtetGns(raekker, 'pension'),
+      fasteMidlCentrale: vaegtetGns(raekker, 'fasteMidlCentrale'),
+      fasteLokale: vaegtetGns(raekker, 'fasteLokale'),
+      midlertLokale: vaegtetGns(raekker, 'midlertLokale'),
+      engangsvederlag: vaegtetGns(raekker, 'engangsvederlag'),
+      andreTillaeg: vaegtetGns(raekker, 'andreTillaeg'),
+      type: raekker[0].type,
+      ministeromraade: raekker[0].ministeromraade,
+      periode: raekker[0].periode,
+    })
+  }
+
+  return result
+}
+
+/** Beregn vægtet gennemsnit for en given lønkomponent */
+function vaegtetGns(raekker: LoenRaekke[], felt: keyof LoenRaekke): number {
+  const sumAarsvaerk = raekker.reduce((s, r) => s + r.aarsvaerk, 0)
+  if (sumAarsvaerk === 0) return 0
+  const sumVaegtet = raekker.reduce((s, r) => s + (r[felt] as number) * r.aarsvaerk, 0)
+  return Math.round(sumVaegtet / sumAarsvaerk)
+}
+
+/** Hent sorterede unikke værdier for en given kolonne */
+export function hentUnikke(data: LoenRaekke[], felt: keyof LoenRaekke): string[] {
+  const set = new Set<string>()
+  for (const r of data) {
+    set.add(String(r[felt]))
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da'))
+}
+
+/** Hent hovedkonti filtreret efter valgte ministerområder */
+export function hentHovedkontiForMinisteromraader(
+  data: LoenRaekke[],
+  ministeromraader: string[]
+): string[] {
+  if (ministeromraader.length === 0) return hentUnikke(data, 'hovedkonto')
+  const set = new Set<string>()
+  for (const r of data) {
+    if (ministeromraader.includes(r.ministeromraade)) {
+      set.add(r.hovedkonto)
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da'))
+}
+
+/** Formatér løn i danske kroner */
+export function formatLoen(value: number): string {
+  return new Intl.NumberFormat('da-DK', {
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+/** Formatér årsværk med én decimal */
+export function formatAarsvaerk(value: number): string {
+  return new Intl.NumberFormat('da-DK', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+/** Sortér perioder kronologisk (f.eks. "2025, 1. kvt." < "2025, 2. kvt.") */
+export function sorterPerioder(perioder: string[]): string[] {
+  return [...perioder].sort((a, b) => {
+    const parseP = (s: string) => {
+      const m = s.match(/(\d{4}),\s*(\d)/)
+      if (!m) return 0
+      return parseInt(m[1]) * 10 + parseInt(m[2])
+    }
+    return parseP(a) - parseP(b)
+  })
+}
+
+/** Opret tom filter */
+export function tomFilter(): LoenFilter {
+  return {
+    perioder: [],
+    ministeromraader: [],
+    hovedkonti: [],
+    typer: [],
+    personalekategorier: [],
+    stillinger: [],
+    loentrin: [],
+  }
+}

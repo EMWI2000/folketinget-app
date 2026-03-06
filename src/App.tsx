@@ -11,6 +11,7 @@ import Finanslov from './pages/Finanslov'
 import Styrelser from './pages/Styrelser'
 import Regnskab from './pages/Regnskab'
 import Vejledning from './pages/Vejledning'
+import Loendata from './pages/Loendata'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/finanslov" element={<Finanslov />} />
             <Route path="/styrelser" element={<Styrelser />} />
             <Route path="/regnskab" element={<Regnskab />} />
+            <Route path="/loendata" element={<Loendata />} />
             <Route path="/vejledning" element={<Vejledning />} />
             {/* Redirects fra gamle URLs */}
             <Route path="/styrelser-regnskab" element={<Navigate to="/styrelser?tab=regnskab" replace />} />

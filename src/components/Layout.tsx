@@ -14,6 +14,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/finanslov', label: 'Finanslov' },
     { to: '/regnskab', label: 'Regnskab' },
     { to: '/styrelser', label: 'Styrelser' },
+    { to: '/loendata', label: 'Løndata' },
     { to: '/statistik', label: 'Statistik' },
   ]
 
