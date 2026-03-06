@@ -27,9 +27,9 @@ export default function Loendata() {
   const [selectedNavne, setSelectedNavne] = useState<string[]>([])
   const [metric, setMetric] = useState<'samletLon' | 'aarsvaerk'>('samletLon')
 
-  // Søgning og sortering i hovedkonto-listen
+  // Søgning i hovedkonto-listen + udfoldet ministerområder
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'aarsvaerk' | 'samletLon' | 'navn'>('aarsvaerk')
+  const [expandedMin, setExpandedMin] = useState<Set<string>>(new Set())
 
   // Filtervalg fra rådata
   const perioder = useMemo(
@@ -76,29 +76,58 @@ export default function Loendata() {
     return beregnBenchmarkPerPeriode(relevant)
   }, [filtreret, selectedNavne])
 
-  // Filtrér og sortér listen
-  const listeData = useMemo(() => {
-    let result = alleBenchmark
+  // Gruppér benchmark efter ministerområde (hierarkisk træ)
+  const treeData = useMemo(() => {
+    const map = new Map<string, BenchmarkRaekke[]>()
+    for (const b of alleBenchmark) {
+      if (!map.has(b.ministeromraade)) map.set(b.ministeromraade, [])
+      map.get(b.ministeromraade)!.push(b)
+    }
+    // Sortér hovedkonti inden for hvert ministerområde efter årsværk
+    for (const [, list] of map) {
+      list.sort((a, b) => b.aarsvaerk - a.aarsvaerk)
+    }
+    // Sortér ministerområder alfabetisk
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'da'))
+  }, [alleBenchmark])
 
-    if (searchTerm.length >= 2) {
-      const term = searchTerm.toLowerCase()
-      result = result.filter(
-        (b) =>
-          b.navn.toLowerCase().includes(term) ||
-          b.ministeromraade.toLowerCase().includes(term) ||
-          b.type.toLowerCase().includes(term)
+  // Filtrér træ efter søgetekst (og auto-åbn matchende ministerområder)
+  const filteredTree = useMemo(() => {
+    if (searchTerm.length < 2) return treeData
+
+    const term = searchTerm.toLowerCase()
+    const result: [string, BenchmarkRaekke[]][] = []
+
+    for (const [min, konti] of treeData) {
+      const minMatch = min.toLowerCase().includes(term)
+      const matchingKonti = konti.filter(
+        (k) =>
+          k.navn.toLowerCase().includes(term) ||
+          k.type.toLowerCase().includes(term)
       )
+      if (minMatch || matchingKonti.length > 0) {
+        result.push([min, minMatch ? konti : matchingKonti])
+      }
     }
+    return result
+  }, [treeData, searchTerm])
 
-    switch (sortBy) {
-      case 'aarsvaerk':
-        return [...result].sort((a, b) => b.aarsvaerk - a.aarsvaerk)
-      case 'samletLon':
-        return [...result].sort((a, b) => b.samletLon - a.samletLon)
-      case 'navn':
-        return [...result].sort((a, b) => a.navn.localeCompare(b.navn, 'da'))
+  // Ved søgning: auto-fold alle matchende ministerområder ud
+  const effectiveExpanded = useMemo(() => {
+    if (searchTerm.length >= 2) {
+      return new Set(filteredTree.map(([min]) => min))
     }
-  }, [alleBenchmark, searchTerm, sortBy])
+    return expandedMin
+  }, [searchTerm, filteredTree, expandedMin])
+
+  const toggleExpand = (min: string) => {
+    setExpandedMin((prev) => {
+      const next = new Set(prev)
+      if (next.has(min)) next.delete(min)
+      else next.add(min)
+      return next
+    })
+  }
 
   // Valide selections (fjern navne der forsvandt pga. filter)
   const validSelected = useMemo(
@@ -244,9 +273,9 @@ export default function Loendata() {
 
       {/* Hoved-layout: Liste (venstre) + Benchmark (højre) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* VENSTRE: Hovedkonto-liste */}
+        {/* VENSTRE: Hierarkisk ministerområde → hovedkonto-træ */}
         <div className="lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow">
-          {/* Søge + sortér */}
+          {/* Søgefelt */}
           <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
             <input
               type="text"
@@ -255,65 +284,112 @@ export default function Loendata() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm"
             />
-            <div className="flex items-center gap-2 mt-2">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="flex-1 px-2 py-1 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded"
-              >
-                <option value="aarsvaerk">Sortér efter årsværk</option>
-                <option value="samletLon">Sortér efter løn</option>
-                <option value="navn">Sortér efter navn</option>
-              </select>
+            <div className="flex items-center justify-between mt-2">
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {listeData.length} hovedkonti
+                {filteredTree.length} ministerområder · {filteredTree.reduce((s, [, k]) => s + k.length, 0)} hovedkonti
               </span>
+              {expandedMin.size > 0 && searchTerm.length < 2 && (
+                <button
+                  onClick={() => setExpandedMin(new Set())}
+                  className="text-xs text-ft-red hover:underline"
+                >
+                  Luk alle
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Scrollbar liste */}
+          {/* Træ-liste */}
           <div className="h-[450px] sm:h-[550px] overflow-y-auto">
-            {listeData.map((row) => {
-              const selected = isSelected(row.navn)
-              const idx = validSelected.indexOf(row.navn)
-              const color = idx >= 0 ? COMPARE_COLORS[idx % COMPARE_COLORS.length] : undefined
-              const label = row.navn.replace(/^§[\d.]+\s*-\s*/, '')
+            {filteredTree.map(([min, konti]) => {
+              const isExpanded = effectiveExpanded.has(min)
+              const minLabel = min.replace(/^§\d+\s*-\s*/, '')
+              const selectedCount = konti.filter((k) => isSelected(k.navn)).length
+              const totalAv = konti.reduce((s, k) => s + k.aarsvaerk, 0)
 
               return (
-                <button
-                  key={row.navn}
-                  onClick={() => toggleSelect(row.navn)}
-                  className={`w-full text-left p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                    selected ? 'bg-gray-50 dark:bg-gray-700' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${
-                        selected ? '' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                      style={selected ? { backgroundColor: color } : {}}
-                    />
+                <div key={min}>
+                  {/* Ministerområde-header (klik for at folde ud) */}
+                  <button
+                    onClick={() => toggleExpand(min)}
+                    className="w-full text-left px-3 py-2.5 flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors sticky top-0 z-10"
+                  >
+                    <svg
+                      className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                        {label}
+                        {minLabel}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {row.ministeromraade.replace(/^§\d+\s*-\s*/, '')} · {row.type}
-                      </div>
-                      <div className="flex gap-3 mt-1">
-                        <span className="text-xs text-gray-600 dark:text-gray-300 font-mono">
-                          {formatAarsvaerk(row.aarsvaerk)} åv
-                        </span>
-                        <span className="text-xs text-gray-600 dark:text-gray-300 font-mono">
-                          {formatLoen(row.samletLon)} kr.
-                        </span>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {konti.length} hovedkonti · {formatAarsvaerk(totalAv)} åv
+                        {selectedCount > 0 && (
+                          <span className="ml-1 text-ft-red font-medium">
+                            · {selectedCount} valgt
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+
+                  {/* Hovedkonti (vises kun når foldet ud) */}
+                  {isExpanded &&
+                    konti.map((row) => {
+                      const selected = isSelected(row.navn)
+                      const idx = validSelected.indexOf(row.navn)
+                      const color =
+                        idx >= 0 ? COMPARE_COLORS[idx % COMPARE_COLORS.length] : undefined
+                      const label = row.navn.replace(/^§[\d.]+\s*-\s*/, '')
+
+                      return (
+                        <button
+                          key={row.navn}
+                          onClick={() => toggleSelect(row.navn)}
+                          className={`w-full text-left pl-9 pr-3 py-2 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors ${
+                            selected ? 'bg-ft-red/5 dark:bg-ft-red/10' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div
+                              className={`w-3 h-3 rounded-full mt-0.5 flex-shrink-0 ${
+                                selected ? '' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
+                              style={selected ? { backgroundColor: color } : {}}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                {label}
+                              </div>
+                              <div className="flex gap-3 mt-0.5">
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                  {row.type}
+                                </span>
+                                <span className="text-[11px] text-gray-600 dark:text-gray-300 font-mono">
+                                  {formatAarsvaerk(row.aarsvaerk)} åv
+                                </span>
+                                <span className="text-[11px] text-gray-600 dark:text-gray-300 font-mono">
+                                  {formatLoen(row.samletLon)} kr.
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                </div>
               )
             })}
+
+            {filteredTree.length === 0 && (
+              <div className="p-4 text-sm text-gray-400 dark:text-gray-500 text-center">
+                Ingen resultater for "{searchTerm}"
+              </div>
+            )}
           </div>
         </div>
 
