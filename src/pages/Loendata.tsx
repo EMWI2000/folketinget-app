@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLoendata } from '../hooks/useLoendata'
 import {
   filtrerData,
@@ -51,6 +51,14 @@ export default function Loendata() {
 
   const update = (partial: Partial<LoenFilter>) => setFilter((f) => ({ ...f, ...partial }))
 
+  // Default til seneste periode så årsværk ikke summeres på tværs af kvartaler
+  useEffect(() => {
+    if (perioder.length > 0 && filter.perioder.length === 0) {
+      const seneste = perioder[perioder.length - 1]
+      setFilter((f) => ({ ...f, perioder: [seneste] }))
+    }
+  }, [perioder]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Filtreret data (alle filtre UNDTAGEN hovedkonto/ministerområde/type – de styrer listen)
   const filtreret = useMemo(() => {
     if (!rawData) return []
@@ -68,13 +76,22 @@ export default function Loendata() {
   // Alle hovedkonti med benchmark-tal (for venstre liste)
   const alleBenchmark = useMemo(() => beregnBenchmark(filtreret), [filtreret])
 
-  // Benchmark per periode (til tidsserier) – for valgte
+  // Benchmark per periode (til tidsserier) – brug ALLE perioder uanset filter
   const benchmarkPerPeriode = useMemo(() => {
-    if (selectedNavne.length === 0) return []
-    // Kun data for de valgte hovedkonti
-    const relevant = filtreret.filter((r) => selectedNavne.includes(r.hovedkonto))
+    if (selectedNavne.length === 0 || !rawData) return []
+    // Brug rådata med kun personalekategori/stilling/løntrin-filtre (IKKE periode-filter)
+    const dataUdenPeriodeFilter = filtrerData(rawData, {
+      perioder: [],
+      ministeromraader: [],
+      hovedkonti: [],
+      typer: [],
+      personalekategorier: filter.personalekategorier,
+      stillinger: filter.stillinger,
+      loentrin: filter.loentrin,
+    })
+    const relevant = dataUdenPeriodeFilter.filter((r) => selectedNavne.includes(r.hovedkonto))
     return beregnBenchmarkPerPeriode(relevant)
-  }, [filtreret, selectedNavne])
+  }, [rawData, selectedNavne, filter.personalekategorier, filter.stillinger, filter.loentrin])
 
   // Gruppér benchmark efter ministerområde (hierarkisk træ)
   const treeData = useMemo(() => {
