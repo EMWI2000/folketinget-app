@@ -29,41 +29,80 @@ function parseCSVLine(line: string): string[] {
   return fields
 }
 
-/** Parse hele CSV-filen til LoenRaekke[] */
+/** Normalisér header-navn (fjern BOM, lowercase, trim) */
+function normalizeHeader(h: string): string {
+  return h.replace(/^\uFEFF/, '').trim().toLowerCase()
+}
+
+/** Header-til-felt mapping */
+const HEADER_MAP: Record<string, keyof LoenRaekke> = {
+  'personalekategori': 'personalekategori',
+  'stilling': 'stilling',
+  'løntrin': 'loentrin',
+  'klasse/lønramme': 'klasse',
+  'årsværk': 'aarsvaerk',
+  'basisløn': 'basislon',
+  'plustid': 'plustid',
+  'pension': 'pension',
+  'faste/midl. tillæg (centrale)': 'fasteMidlCentrale',
+  'faste tillæg (lokale)': 'fasteLokale',
+  'midlert. tillæg (lokale)': 'midlertLokale',
+  'engangs-vederlag': 'engangsvederlag',
+  'andre tillæg': 'andreTillaeg',
+  'samlet løn': 'samletLon',
+  'periode': 'periode',
+  'ministerområde': 'ministeromraade',
+  'hovedkonto': 'hovedkonto',
+  'type': 'type',
+}
+
+const NUMERIC_FIELDS = new Set<keyof LoenRaekke>([
+  'aarsvaerk', 'basislon', 'plustid', 'pension',
+  'fasteMidlCentrale', 'fasteLokale', 'midlertLokale',
+  'engangsvederlag', 'andreTillaeg', 'samletLon',
+])
+
+/** Parse hele CSV-filen til LoenRaekke[] — header-baseret (håndterer alle tabelfordelinger) */
 export function parseLoenCSV(content: string): LoenRaekke[] {
   const lines = content.split(/\r?\n/)
+  if (lines.length < 2) return []
+
+  // Parse header
+  const headerFields = parseCSVLine(lines[0])
+  const colMap: { index: number; field: keyof LoenRaekke }[] = []
+
+  for (let i = 0; i < headerFields.length; i++) {
+    const normalized = normalizeHeader(headerFields[i])
+    const field = HEADER_MAP[normalized]
+    if (field) {
+      colMap.push({ index: i, field })
+    }
+  }
+
   const rows: LoenRaekke[] = []
 
-  // Skip header (første linje) og BOM
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
 
     const fields = parseCSVLine(line)
-    if (fields.length < 17) continue
 
-    const aarsvaerk = parseFloat(fields[3])
-    if (isNaN(aarsvaerk) || aarsvaerk <= 0) continue
+    const row: Partial<LoenRaekke> = {}
+    for (const { index, field } of colMap) {
+      const val = fields[index] ?? ''
+      if (NUMERIC_FIELDS.has(field)) {
+        ;(row as Record<string, unknown>)[field] = parseFloat(val) || 0
+      } else {
+        ;(row as Record<string, unknown>)[field] = val
+      }
+    }
 
-    rows.push({
-      personalekategori: fields[0],
-      stilling: fields[1],
-      loentrin: fields[2],
-      aarsvaerk,
-      basislon: parseFloat(fields[4]) || 0,
-      plustid: parseFloat(fields[5]) || 0,
-      pension: parseFloat(fields[6]) || 0,
-      fasteMidlCentrale: parseFloat(fields[7]) || 0,
-      fasteLokale: parseFloat(fields[8]) || 0,
-      midlertLokale: parseFloat(fields[9]) || 0,
-      engangsvederlag: parseFloat(fields[10]) || 0,
-      andreTillaeg: parseFloat(fields[11]) || 0,
-      samletLon: parseFloat(fields[12]) || 0,
-      periode: fields[13],
-      ministeromraade: fields[14],
-      hovedkonto: fields[15],
-      type: fields[16] as LoenRaekke['type'],
-    })
+    // Skip rækker uden årsværk
+    if (!row.aarsvaerk || row.aarsvaerk <= 0) continue
+    // Kræv de faste felter
+    if (!row.periode || !row.hovedkonto || !row.ministeromraade) continue
+
+    rows.push(row as LoenRaekke)
   }
 
   return rows
@@ -76,9 +115,10 @@ export function filtrerData(data: LoenRaekke[], filter: LoenFilter): LoenRaekke[
     if (filter.ministeromraader.length > 0 && !filter.ministeromraader.includes(r.ministeromraade)) return false
     if (filter.hovedkonti.length > 0 && !filter.hovedkonti.includes(r.hovedkonto)) return false
     if (filter.typer.length > 0 && !filter.typer.includes(r.type)) return false
-    if (filter.personalekategorier.length > 0 && !filter.personalekategorier.includes(r.personalekategori)) return false
-    if (filter.stillinger.length > 0 && !filter.stillinger.includes(r.stilling)) return false
-    if (filter.loentrin.length > 0 && !filter.loentrin.includes(r.loentrin)) return false
+    if (filter.personalekategorier.length > 0 && r.personalekategori && !filter.personalekategorier.includes(r.personalekategori)) return false
+    if (filter.stillinger.length > 0 && r.stilling && !filter.stillinger.includes(r.stilling)) return false
+    if (filter.loentrin.length > 0 && r.loentrin && !filter.loentrin.includes(r.loentrin)) return false
+    if (filter.klasser.length > 0 && r.klasse && !filter.klasser.includes(r.klasse)) return false
     return true
   })
 }
@@ -173,7 +213,8 @@ function vaegtetGns(raekker: LoenRaekke[], felt: keyof LoenRaekke): number {
 export function hentUnikke(data: LoenRaekke[], felt: keyof LoenRaekke): string[] {
   const set = new Set<string>()
   for (const r of data) {
-    set.add(String(r[felt]))
+    const val = r[felt]
+    if (val != null && val !== '') set.add(String(val))
   }
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'da'))
 }
@@ -230,5 +271,6 @@ export function tomFilter(): LoenFilter {
     personalekategorier: [],
     stillinger: [],
     loentrin: [],
+    klasser: [],
   }
 }

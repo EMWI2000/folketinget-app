@@ -10,24 +10,28 @@ import {
   formatLoen,
   formatAarsvaerk,
 } from '../lib/loendata/parser'
-import type { LoenFilter, BenchmarkRaekke } from '../lib/loendata/types'
-import { COMPARE_COLORS } from '../lib/loendata/types'
+import type { LoenFilter, BenchmarkRaekke, TabelfordelingId } from '../lib/loendata/types'
+import { COMPARE_COLORS, TABELFORDELINGER } from '../lib/loendata/types'
 import MultiSelect from '../components/loendata/MultiSelect'
 import LoenBarChart from '../components/loendata/LoenBarChart'
 import LoenTidsserie from '../components/loendata/LoenTidsserie'
 import LoenKomponentChart from '../components/loendata/LoenKomponentChart'
 
 export default function Loendata() {
-  const { data: rawData, isLoading, error } = useLoendata()
+  const [tabelfordeling, setTabelfordeling] = useState<TabelfordelingId>('pkat')
+  const { data: rawData, isLoading, error } = useLoendata(tabelfordeling)
 
-  // Datafiltre (påvirker hvilke rækker der aggregeres)
+  const aktivTabelfordeling = TABELFORDELINGER.find((t) => t.id === tabelfordeling)!
+  const harDim = (dim: string) => aktivTabelfordeling.dimensioner.includes(dim as never)
+
+  // Datafiltre
   const [filter, setFilter] = useState<LoenFilter>(tomFilter)
 
   // Benchmark-selection
   const [selectedNavne, setSelectedNavne] = useState<string[]>([])
   const [metric, setMetric] = useState<'samletLon' | 'aarsvaerk'>('samletLon')
 
-  // Søgning i hovedkonto-listen + udfoldet ministerområder
+  // Søgning + udfoldet ministerområder
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedMin, setExpandedMin] = useState<Set<string>>(new Set())
 
@@ -37,21 +41,25 @@ export default function Loendata() {
     [rawData]
   )
   const personalekategorier = useMemo(
-    () => (rawData ? hentUnikke(rawData, 'personalekategori') : []),
-    [rawData]
+    () => (rawData && harDim('personalekategori') ? hentUnikke(rawData, 'personalekategori') : []),
+    [rawData, tabelfordeling] // eslint-disable-line react-hooks/exhaustive-deps
   )
   const stillinger = useMemo(
-    () => (rawData ? hentUnikke(rawData, 'stilling') : []),
-    [rawData]
+    () => (rawData && harDim('stilling') ? hentUnikke(rawData, 'stilling') : []),
+    [rawData, tabelfordeling] // eslint-disable-line react-hooks/exhaustive-deps
   )
   const loentrin = useMemo(
-    () => (rawData ? hentUnikke(rawData, 'loentrin') : []),
-    [rawData]
+    () => (rawData && harDim('loentrin') ? hentUnikke(rawData, 'loentrin') : []),
+    [rawData, tabelfordeling] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const klasser = useMemo(
+    () => (rawData && harDim('klasse') ? hentUnikke(rawData, 'klasse') : []),
+    [rawData, tabelfordeling] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const update = (partial: Partial<LoenFilter>) => setFilter((f) => ({ ...f, ...partial }))
 
-  // Default til seneste periode så årsværk ikke summeres på tværs af kvartaler
+  // Default til seneste periode
   useEffect(() => {
     if (perioder.length > 0 && filter.perioder.length === 0) {
       const seneste = perioder[perioder.length - 1]
@@ -59,7 +67,18 @@ export default function Loendata() {
     }
   }, [perioder]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtreret data (alle filtre UNDTAGEN hovedkonto/ministerområde/type – de styrer listen)
+  // Ryd irrelevante filtre ved skift af tabelfordeling
+  useEffect(() => {
+    setFilter((f) => ({
+      ...f,
+      personalekategorier: harDim('personalekategori') ? f.personalekategorier : [],
+      stillinger: harDim('stilling') ? f.stillinger : [],
+      loentrin: harDim('loentrin') ? f.loentrin : [],
+      klasser: harDim('klasse') ? f.klasser : [],
+    }))
+  }, [tabelfordeling]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtreret data (alle filtre UNDTAGEN hovedkonto/ministerområde/type)
   const filtreret = useMemo(() => {
     if (!rawData) return []
     return filtrerData(rawData, {
@@ -70,16 +89,16 @@ export default function Loendata() {
       personalekategorier: filter.personalekategorier,
       stillinger: filter.stillinger,
       loentrin: filter.loentrin,
+      klasser: filter.klasser,
     })
-  }, [rawData, filter.perioder, filter.personalekategorier, filter.stillinger, filter.loentrin])
+  }, [rawData, filter.perioder, filter.personalekategorier, filter.stillinger, filter.loentrin, filter.klasser])
 
-  // Alle hovedkonti med benchmark-tal (for venstre liste)
+  // Alle hovedkonti med benchmark-tal
   const alleBenchmark = useMemo(() => beregnBenchmark(filtreret), [filtreret])
 
-  // Benchmark per periode (til tidsserier) – brug ALLE perioder uanset filter
+  // Benchmark per periode (til tidsserier) – brug ALLE perioder
   const benchmarkPerPeriode = useMemo(() => {
     if (selectedNavne.length === 0 || !rawData) return []
-    // Brug rådata med kun personalekategori/stilling/løntrin-filtre (IKKE periode-filter)
     const dataUdenPeriodeFilter = filtrerData(rawData, {
       perioder: [],
       ministeromraader: [],
@@ -88,10 +107,11 @@ export default function Loendata() {
       personalekategorier: filter.personalekategorier,
       stillinger: filter.stillinger,
       loentrin: filter.loentrin,
+      klasser: filter.klasser,
     })
     const relevant = dataUdenPeriodeFilter.filter((r) => selectedNavne.includes(r.hovedkonto))
     return beregnBenchmarkPerPeriode(relevant)
-  }, [rawData, selectedNavne, filter.personalekategorier, filter.stillinger, filter.loentrin])
+  }, [rawData, selectedNavne, filter.personalekategorier, filter.stillinger, filter.loentrin, filter.klasser])
 
   // Gruppér benchmark efter ministerområde (hierarkisk træ)
   const treeData = useMemo(() => {
@@ -100,27 +120,21 @@ export default function Loendata() {
       if (!map.has(b.ministeromraade)) map.set(b.ministeromraade, [])
       map.get(b.ministeromraade)!.push(b)
     }
-    // Sortér hovedkonti inden for hvert ministerområde efter årsværk
     for (const [, list] of map) {
       list.sort((a, b) => b.aarsvaerk - a.aarsvaerk)
     }
-    // Sortér ministerområder alfabetisk
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'da'))
   }, [alleBenchmark])
 
-  // Filtrér træ efter søgetekst (og auto-åbn matchende ministerområder)
+  // Filtrér træ efter søgetekst
   const filteredTree = useMemo(() => {
     if (searchTerm.length < 2) return treeData
-
     const term = searchTerm.toLowerCase()
     const result: [string, BenchmarkRaekke[]][] = []
-
     for (const [min, konti] of treeData) {
       const minMatch = min.toLowerCase().includes(term)
       const matchingKonti = konti.filter(
-        (k) =>
-          k.navn.toLowerCase().includes(term) ||
-          k.type.toLowerCase().includes(term)
+        (k) => k.navn.toLowerCase().includes(term) || k.type.toLowerCase().includes(term)
       )
       if (minMatch || matchingKonti.length > 0) {
         result.push([min, minMatch ? konti : matchingKonti])
@@ -129,7 +143,7 @@ export default function Loendata() {
     return result
   }, [treeData, searchTerm])
 
-  // Ved søgning: auto-fold alle matchende ministerområder ud
+  // Auto-fold ved søgning
   const effectiveExpanded = useMemo(() => {
     if (searchTerm.length >= 2) {
       return new Set(filteredTree.map(([min]) => min))
@@ -146,12 +160,11 @@ export default function Loendata() {
     })
   }
 
-  // Valide selections (fjern navne der forsvandt pga. filter)
+  // Valide selections
   const validSelected = useMemo(
     () => selectedNavne.filter((n) => alleBenchmark.some((b) => b.navn === n)),
     [selectedNavne, alleBenchmark]
   )
-
   const selectedBenchmark = useMemo(
     () => alleBenchmark.filter((b) => validSelected.includes(b.navn)),
     [alleBenchmark, validSelected]
@@ -167,11 +180,11 @@ export default function Loendata() {
 
   const isSelected = (navn: string) => validSelected.includes(navn)
 
-  const activeFilterCount =
-    filter.perioder.length +
+  const dimensionFilterCount =
     filter.personalekategorier.length +
     filter.stillinger.length +
-    filter.loentrin.length
+    filter.loentrin.length +
+    filter.klasser.length
 
   if (isLoading) {
     return (
@@ -203,35 +216,77 @@ export default function Loendata() {
         </h1>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Vælg hovedkonti fra listen og sammenlign lønninger.
-          Data fra Moderniseringsstyrelsens lønoverblik.
+          Data fra{' '}
+          <a
+            href="https://loenoverblik.dk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-ft-red"
+          >
+            Moderniseringsstyrelsens lønoverblik
+          </a>
+          .
         </p>
       </div>
 
-      {/* Datafiltre (kompakt) */}
+      {/* Disclaimer */}
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 sm:p-4 mb-4 text-sm text-amber-800 dark:text-amber-300">
+        <details>
+          <summary className="font-medium cursor-pointer select-none">
+            Om data og forbehold
+          </summary>
+          <div className="mt-2 space-y-2 text-amber-700 dark:text-amber-400">
+            <p>
+              Data stammer fra Moderniseringsstyrelsens lønoverblik (loenoverblik.dk) og
+              viser gennemsnitsløn pr. årsværk fordelt på lønkomponenter for statslige
+              hovedkonti.
+            </p>
+            <p>
+              <strong>Anonymiseringsgrænse:</strong> Grupper med under 3 årsværk er udeladt
+              af hensyn til anonymisering. Det betyder, at jo mere detaljeret en
+              tabelfordeling er (f.eks. personalekategori + stilling + løntrin), desto flere
+              små grupper falder under grænsen, og desto flere årsværk mangler i totalen.
+              Vælg en lavere detaljegrad (f.eks. kun &quot;Personalekategori&quot;) for mere
+              komplette tal.
+            </p>
+            <p>
+              <strong>Løntal er gennemsnit:</strong> Alle lønbeløb er vægtet gennemsnit pr.
+              årsværk og kan ikke summeres direkte. Ved sammenligning af hovedkonti beregnes
+              det vægtede gennemsnit: <span className="font-mono text-xs">&#931;(løn &times; årsværk) / &#931;(årsværk)</span>.
+            </p>
+            <p>
+              <strong>Perioder:</strong> Data opdateres kvartalsvist. Ikke alle perioder er
+              tilgængelige for alle tabelfordelinger.
+            </p>
+          </div>
+        </details>
+      </div>
+
+      {/* Tabelfordeling + Datafiltre */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Datafiltre
-            <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
-              (påvirker beregningen for alle hovedkonti)
+        {/* Tabelfordeling */}
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+            Tabelfordeling
+            <span className="ml-1 font-normal text-gray-400 dark:text-gray-500">
+              (detaljegrad — lavere detalje = mere komplet data)
             </span>
-          </h3>
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() =>
-                setFilter({
-                  ...filter,
-                  perioder: [],
-                  personalekategorier: [],
-                  stillinger: [],
-                  loentrin: [],
-                })
-              }
-              className="text-xs text-ft-red hover:underline"
-            >
-              Ryd filtre ({activeFilterCount})
-            </button>
-          )}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {TABELFORDELINGER.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTabelfordeling(t.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  tabelfordeling === t.id
+                    ? 'bg-ft-red text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Periode pills */}
@@ -262,29 +317,65 @@ export default function Loendata() {
           </div>
         </div>
 
-        {/* Resten i grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MultiSelect
-            label="Personalekategori"
-            options={personalekategorier}
-            selected={filter.personalekategorier}
-            onChange={(v) => update({ personalekategorier: v })}
-            placeholder="Alle kategorier"
-          />
-          <MultiSelect
-            label="Stilling"
-            options={stillinger}
-            selected={filter.stillinger}
-            onChange={(v) => update({ stillinger: v })}
-            placeholder="Alle stillinger"
-          />
-          <MultiSelect
-            label="Løntrin"
-            options={loentrin}
-            selected={filter.loentrin}
-            onChange={(v) => update({ loentrin: v })}
-            placeholder="Alle løntrin"
-          />
+        {/* Dimension-filtre (kun dem der er relevante for tabelfordelingen) */}
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            Dimensionsfiltre
+          </h3>
+          {dimensionFilterCount > 0 && (
+            <button
+              onClick={() =>
+                setFilter((f) => ({
+                  ...f,
+                  personalekategorier: [],
+                  stillinger: [],
+                  loentrin: [],
+                  klasser: [],
+                }))
+              }
+              className="text-xs text-ft-red hover:underline"
+            >
+              Ryd ({dimensionFilterCount})
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {harDim('personalekategori') && (
+            <MultiSelect
+              label="Personalekategori"
+              options={personalekategorier}
+              selected={filter.personalekategorier}
+              onChange={(v) => update({ personalekategorier: v })}
+              placeholder="Alle kategorier"
+            />
+          )}
+          {harDim('stilling') && (
+            <MultiSelect
+              label="Stilling"
+              options={stillinger}
+              selected={filter.stillinger}
+              onChange={(v) => update({ stillinger: v })}
+              placeholder="Alle stillinger"
+            />
+          )}
+          {harDim('klasse') && (
+            <MultiSelect
+              label="Klasse/Lønramme"
+              options={klasser}
+              selected={filter.klasser}
+              onChange={(v) => update({ klasser: v })}
+              placeholder="Alle klasser"
+            />
+          )}
+          {harDim('loentrin') && (
+            <MultiSelect
+              label="Løntrin"
+              options={loentrin}
+              selected={filter.loentrin}
+              onChange={(v) => update({ loentrin: v })}
+              placeholder="Alle løntrin"
+            />
+          )}
         </div>
       </div>
 
@@ -326,7 +417,6 @@ export default function Loendata() {
 
               return (
                 <div key={min}>
-                  {/* Ministerområde-header (klik for at folde ud) */}
                   <button
                     onClick={() => toggleExpand(min)}
                     className="w-full text-left px-3 py-2.5 flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors sticky top-0 z-10"
@@ -354,7 +444,6 @@ export default function Loendata() {
                     </div>
                   </button>
 
-                  {/* Hovedkonti (vises kun når foldet ud) */}
                   {isExpanded &&
                     konti.map((row) => {
                       const selected = isSelected(row.navn)
@@ -404,7 +493,7 @@ export default function Loendata() {
 
             {filteredTree.length === 0 && (
               <div className="p-4 text-sm text-gray-400 dark:text-gray-500 text-center">
-                Ingen resultater for "{searchTerm}"
+                Ingen resultater for &quot;{searchTerm}&quot;
               </div>
             )}
           </div>

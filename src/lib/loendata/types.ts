@@ -1,7 +1,8 @@
 export interface LoenRaekke {
-  personalekategori: string
-  stilling: string
-  loentrin: string
+  personalekategori?: string
+  stilling?: string
+  loentrin?: string
+  klasse?: string
   aarsvaerk: number
   basislon: number
   plustid: number
@@ -15,23 +16,50 @@ export interface LoenRaekke {
   periode: string
   ministeromraade: string
   hovedkonto: string
-  type: 'Departement' | 'Styrelse' | 'Andet'
+  type: string
 }
+
+export type TabelfordelingId =
+  | 'pkat'
+  | 'pkat_klasse'
+  | 'pkat_klasse_loentrin'
+  | 'pkat_loentrin'
+  | 'pkat_stilling'
+  | 'pkat_stilling_loentrin'
+  | 'stilling'
+
+export interface TabelfordelingInfo {
+  id: TabelfordelingId
+  label: string
+  file: string
+  dimensioner: (keyof Pick<LoenRaekke, 'personalekategori' | 'stilling' | 'loentrin' | 'klasse'>)[]
+}
+
+export const TABELFORDELINGER: TabelfordelingInfo[] = [
+  { id: 'pkat', label: 'Personalekategori', file: 'pkat.csv', dimensioner: ['personalekategori'] },
+  { id: 'pkat_klasse', label: 'Personalekategori og klasse', file: 'pkat_klasse.csv', dimensioner: ['personalekategori', 'klasse'] },
+  { id: 'pkat_klasse_loentrin', label: 'Personalekategori, klasse og løntrin', file: 'pkat_klasse_loentrin.csv', dimensioner: ['personalekategori', 'klasse', 'loentrin'] },
+  { id: 'pkat_loentrin', label: 'Personalekategori og løntrin', file: 'pkat_loentrin.csv', dimensioner: ['personalekategori', 'loentrin'] },
+  { id: 'pkat_stilling', label: 'Personalekategori og stillingsbetegnelse', file: 'pkat_stilling.csv', dimensioner: ['personalekategori', 'stilling'] },
+  { id: 'pkat_stilling_loentrin', label: 'Personalekategori, stillingsbetegn. og løntrin', file: 'pkat_stilling_loentrin.csv', dimensioner: ['personalekategori', 'stilling', 'loentrin'] },
+  { id: 'stilling', label: 'Stillingsbetegnelse', file: 'stilling.csv', dimensioner: ['stilling'] },
+]
 
 export interface LoenFilter {
   perioder: string[]
   ministeromraader: string[]
   hovedkonti: string[]
-  typer: ('Departement' | 'Styrelse' | 'Andet')[]
+  typer: string[]
   personalekategorier: string[]
   stillinger: string[]
   loentrin: string[]
+  klasser: string[]
 }
 
 export interface BenchmarkRaekke {
-  navn: string // hovedkonto eller gruppenavn
-  aarsvaerk: number // sum
-  samletLon: number // vægtet gennemsnit
+  navn: string
+  aarsvaerk: number
+  samletLon: number
   basislon: number
   plustid: number
   pension: number
