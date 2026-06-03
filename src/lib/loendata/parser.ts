@@ -209,14 +209,16 @@ function vaegtetGns(raekker: LoenRaekke[], felt: keyof LoenRaekke): number {
   return Math.round(sumVaegtet / sumAarsvaerk)
 }
 
-/** Hent sorterede unikke værdier for en given kolonne */
+/** Hent sorterede unikke værdier for en given kolonne.
+ *  Bruger numerisk-bevidst sortering, så nummer-præfikser uden nul-padding
+ *  (fx personalekategori "6"/"46"/"240", løntrin) sorterer naturligt. */
 export function hentUnikke(data: LoenRaekke[], felt: keyof LoenRaekke): string[] {
   const set = new Set<string>()
   for (const r of data) {
     const val = r[felt]
     if (val != null && val !== '') set.add(String(val))
   }
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da'))
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da', { numeric: true }))
 }
 
 /** Hent hovedkonti filtreret efter valgte ministerområder */
@@ -231,7 +233,7 @@ export function hentHovedkontiForMinisteromraader(
       set.add(r.hovedkonto)
     }
   }
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da'))
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'da', { numeric: true }))
 }
 
 /** Formatér løn i danske kroner */
@@ -249,16 +251,30 @@ export function formatAarsvaerk(value: number): string {
   }).format(value)
 }
 
+/**
+ * Omregn en periode til et fortløbende kvartals-index (år × 4 + kvartal − 1).
+ * Bruges til tidsbaseret x-akse, så manglende kvartaler (fx hele 2025 i de
+ * fleste tabelfordelinger) får korrekt afstand i stedet for at blive trukket
+ * sammen. Returnerer null hvis formatet ikke kan genkendes.
+ */
+export function periodeTilIndex(periode: string): number | null {
+  const m = periode.match(/(\d{4}),\s*(\d)/)
+  if (!m) return null
+  return parseInt(m[1]) * 4 + (parseInt(m[2]) - 1)
+}
+
+/** Omregn et kvartals-index tilbage til en kort label, fx "Q3 2025". */
+export function indexTilKvartal(idx: number): string {
+  const aar = Math.floor(idx / 4)
+  const kvt = (idx % 4) + 1
+  return `Q${kvt} ${aar}`
+}
+
 /** Sortér perioder kronologisk (f.eks. "2025, 1. kvt." < "2025, 2. kvt.") */
 export function sorterPerioder(perioder: string[]): string[] {
-  return [...perioder].sort((a, b) => {
-    const parseP = (s: string) => {
-      const m = s.match(/(\d{4}),\s*(\d)/)
-      if (!m) return 0
-      return parseInt(m[1]) * 10 + parseInt(m[2])
-    }
-    return parseP(a) - parseP(b)
-  })
+  return [...perioder].sort(
+    (a, b) => (periodeTilIndex(a) ?? 0) - (periodeTilIndex(b) ?? 0)
+  )
 }
 
 /** Opret tom filter */

@@ -123,7 +123,7 @@ export default function Loendata() {
     for (const [, list] of map) {
       list.sort((a, b) => b.aarsvaerk - a.aarsvaerk)
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'da'))
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'da', { numeric: true }))
   }, [alleBenchmark])
 
   // Filtrér træ efter søgetekst
@@ -185,6 +185,10 @@ export default function Loendata() {
     filter.stillinger.length +
     filter.loentrin.length +
     filter.klasser.length
+
+  // Valgte konti der ikke har data i den aktuelle periode/tabelfordeling og
+  // derfor er udeladt af grafer/tabel (ellers forsvinder de lydløst).
+  const skjulteValgte = selectedNavne.length - validSelected.length
 
   if (isLoading) {
     return (
@@ -250,13 +254,24 @@ export default function Loendata() {
               komplette tal.
             </p>
             <p>
+              <strong>Årsværk kan ikke sammenlignes på tværs af tabelfordelinger:</strong> For
+              samme hovedkonto kan op til ~16&nbsp;% af årsværkene mangle i de finest opdelte
+              tabeller i forhold til de groveste (fordi flere små grupper anonymiseres væk).
+              Den <em>vægtede gennemsnitsløn</em> er derimod stabil (typisk under 1&nbsp;%
+              forskel), så lønbenchmark kan sammenlignes – men årsværk-totaler bør kun
+              sammenlignes inden for samme tabelfordeling.
+            </p>
+            <p>
               <strong>Løntal er gennemsnit:</strong> Alle lønbeløb er vægtet gennemsnit pr.
               årsværk og kan ikke summeres direkte. Ved sammenligning af hovedkonti beregnes
               det vægtede gennemsnit: <span className="font-mono text-xs">&#931;(løn &times; årsværk) / &#931;(årsværk)</span>.
             </p>
             <p>
-              <strong>Perioder:</strong> Data opdateres kvartalsvist. Ikke alle perioder er
-              tilgængelige for alle tabelfordelinger.
+              <strong>Perioder:</strong> Data opdateres kvartalsvist, men dækningen varierer:
+              de fleste tabelfordelinger har kun 2024 (1.–4. kvt.) og 2026 (1. kvt.) –
+              <strong> hele 2025 mangler</strong>, og kun den finest opdelte tabel
+              (personalekategori + stilling + løntrin) har en fuld kvartalsserie. 2026 (1. kvt.)
+              bygger desuden på lidt færre rækker end 2024 og kan være foreløbig.
             </p>
           </div>
         </details>
@@ -520,6 +535,15 @@ export default function Loendata() {
               <p className="text-sm">
                 Klik på en eller flere hovedkonti til venstre for at sammenligne lønninger.
               </p>
+              {skjulteValgte > 0 && (
+                <p className="text-sm mt-3 text-amber-600 dark:text-amber-400">
+                  {skjulteValgte === selectedNavne.length && selectedNavne.length === 1
+                    ? 'Den valgte hovedkonto har'
+                    : `${skjulteValgte} valgte hovedkonti har`}{' '}
+                  ingen data i denne periode/tabelfordeling. Vælg en anden periode eller
+                  en lavere detaljegrad.
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -536,6 +560,12 @@ export default function Loendata() {
                     Ryd alle
                   </button>
                 </div>
+                {skjulteValgte > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                    {skjulteValgte} yderligere valgt{skjulteValgte === 1 ? '' : 'e'} har ingen
+                    data i denne periode/tabelfordeling og vises ikke.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {validSelected.map((navn, idx) => {
                     const color = COMPARE_COLORS[idx % COMPARE_COLORS.length]
