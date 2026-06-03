@@ -22,6 +22,12 @@ export default function LoenKomponentChart({ data, selectedNavne }: LoenKomponen
   // Beregn max samlet løn (for at skalere alle bars ens)
   const maxTotal = Math.max(...selectedData.map((d) => d.samletLon))
 
+  // Negative komponenter (legitime korrektioner) kan ikke tegnes i en stak og
+  // klippes til 0 nedenfor – men de findes i data når dimensionsfiltre er aktive.
+  const harNegative = selectedData.some((d) =>
+    LOEN_KOMPONENTER.some((komp) => (d[komp.key] as number) < 0)
+  )
+
   const totalHeight = padding.top + selectedData.length * (barHeight + gap) + padding.bottom
 
   return (
@@ -97,9 +103,20 @@ export default function LoenKomponentChart({ data, selectedNavne }: LoenKomponen
                 </rect>
               ))}
 
+              {/* Ægte total-markør fra Samlet løn-kolonnen (ikke summen af de
+                  klippede segmenter), så stakken ikke påstår en forkert total */}
+              <line
+                x1={padding.left + (maxTotal > 0 ? (row.samletLon / maxTotal) * chartW : 0)}
+                y1={y - 2}
+                x2={padding.left + (maxTotal > 0 ? (row.samletLon / maxTotal) * chartW : 0)}
+                y2={y + barHeight + 2}
+                className="stroke-gray-400 dark:stroke-gray-500"
+                strokeWidth={1.5}
+              />
+
               {/* Total label */}
               <text
-                x={padding.left + xOffset + 6}
+                x={padding.left + Math.max(xOffset, maxTotal > 0 ? (row.samletLon / maxTotal) * chartW : 0) + 8}
                 y={y + barHeight / 2}
                 dominantBaseline="middle"
                 className="text-[10px] fill-gray-600 dark:fill-gray-400 font-mono"
@@ -119,7 +136,18 @@ export default function LoenKomponentChart({ data, selectedNavne }: LoenKomponen
             <span className="text-gray-500 dark:text-gray-400">{komp.label}</span>
           </div>
         ))}
+        <div className="flex items-center gap-1 text-[11px]">
+          <div className="w-px h-3 bg-gray-400 dark:bg-gray-500" />
+          <span className="text-gray-500 dark:text-gray-400">Samlet løn</span>
+        </div>
       </div>
+
+      {harNegative && (
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+          Enkelte negative tillæg (korrektioner) kan ikke vises i stakken og er
+          udeladt; den grå markør viser den reelle samlede løn.
+        </p>
+      )}
     </div>
   )
 }
