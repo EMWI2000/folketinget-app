@@ -1,36 +1,9 @@
 import type { BudgetNode, FinanslovData } from './types'
-
-/** Mønstre der identificerer styrelser */
-const AGENCY_PATTERNS = [
-  /styrelsen$/i,
-  /direktoratet$/i,
-  /nævnet$/i,
-]
-
-/** Mønstre der IKKE er styrelser (ministerier, departementer) */
-const EXCLUDE_PATTERNS = [
-  /ministeriet$/i,
-  /ministerium$/i,
-  /departementet$/i,
-  /i alt$/i,
-]
+import { isAgencyNode } from '../shared/agencies'
 
 /** Tjek om en node er en styrelse (kun på hovedkonto-niveau) */
 export function isAgency(node: BudgetNode): boolean {
-  // Styrelser ligger KUN på hovedkonto-niveau (6-cifret kode)
-  if (node.level !== 'hovedkonto') {
-    return false
-  }
-
-  const name = node.name.trim()
-
-  // Ekskluder ministerier mm.
-  if (EXCLUDE_PATTERNS.some((p) => p.test(name))) {
-    return false
-  }
-
-  // Tjek om det matcher et styrelse-mønster
-  return AGENCY_PATTERNS.some((p) => p.test(name))
+  return isAgencyNode(node)
 }
 
 /** Find alle styrelser i finanslovsdata (kun hovedkonti) */
