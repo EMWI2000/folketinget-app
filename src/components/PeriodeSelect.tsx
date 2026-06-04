@@ -29,11 +29,3 @@ export default function PeriodeSelect({ perioder, value, onChange, showAll }: Pe
     </select>
   )
 }
-
-export function useDefaultPeriode(perioder: Periode[] | undefined): number | null {
-  return useMemo(() => {
-    if (!perioder) return null
-    const samlinger = perioder.filter((p) => p.type === 'samling')
-    return samlinger[0]?.id ?? null
-  }, [perioder])
-}

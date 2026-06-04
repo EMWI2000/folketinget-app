@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSager } from '../hooks/useSager'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -7,32 +7,33 @@ import SearchBar from '../components/SearchBar'
 import FilterPanel from '../components/FilterPanel'
 import SagKort from '../components/SagKort'
 import Pagination from '../components/Pagination'
-import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import PeriodeSelect from '../components/PeriodeSelect'
+import { useDefaultPeriode } from '../hooks/useDefaultPeriode'
 
 const PAGE_SIZE = 20
 
 export default function Soeg() {
   useDocumentTitle('Søg i sager')
   const [searchParams] = useSearchParams()
-  const initialQuery = searchParams.get('q') || ''
+  const queryParam = searchParams.get('q') || ''
 
-  const [search, setSearch] = useState(initialQuery)
+  const [search, setSearch] = useState(queryParam)
   const [typeid, setTypeid] = useState<number | null>(null)
   const [page, setPage] = useState(1)
+  const [prevQueryParam, setPrevQueryParam] = useState(queryParam)
 
   const perioder = usePerioder()
   const defaultPeriode = useDefaultPeriode(perioder.data)
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
   const aktivPeriode = selectedPeriode ?? defaultPeriode
 
-  // Opdater søgning hvis query-param ændres (f.eks. fra emneord-klik)
-  useEffect(() => {
-    const q = searchParams.get('q') || ''
-    if (q !== search) {
-      setSearch(q)
-      setPage(1)
-    }
-  }, [searchParams])
+  // Synk søgefelt når query-param ændres (f.eks. fra emneord-klik) — setState under
+  // render i stedet for effekt, jf. React-anbefalingen om at justere state ved prop-skift
+  if (queryParam !== prevQueryParam) {
+    setPrevQueryParam(queryParam)
+    setSearch(queryParam)
+    setPage(1)
+  }
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)

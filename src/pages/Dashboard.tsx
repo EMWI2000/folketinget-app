@@ -8,7 +8,8 @@ import { usePerioder } from '../hooks/useAktstykker'
 import SagKort from '../components/SagKort'
 import AfstemningKort from '../components/AfstemningKort'
 import StatKort from '../components/StatKort'
-import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import PeriodeSelect from '../components/PeriodeSelect'
+import { useDefaultPeriode } from '../hooks/useDefaultPeriode'
 import WatchlistPanel from '../components/WatchlistPanel'
 
 function LoadingSkeleton() {

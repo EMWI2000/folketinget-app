@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useAllFinanslov, useFinanslovSearch, useAvailableYears } from '../hooks/useFinanslov'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { BudgetNode, CompareItem, HierarchyLevel, ValueKey } from '../lib/finanslov/types'
@@ -16,19 +16,17 @@ export default function Finanslov() {
   const allData = useAllFinanslov()
 
   // UI state
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [selectedYearOverride, setSelectedYear] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
   const [compareItems, setCompareItems] = useState<CompareItem[]>([])
   const [valueKey, setValueKey] = useState<ValueKey>('R')
 
-  // Sæt default år når data er indlæst
-  useEffect(() => {
-    if (availableYears.data && availableYears.data.length > 0 && selectedYear === null) {
-      // Vælg det nyeste år som default
-      setSelectedYear(Math.max(...availableYears.data))
-    }
-  }, [availableYears.data, selectedYear])
+  // Vælg nyeste år som default (afledt state — overstyres når brugeren vælger et år)
+  const defaultYear = availableYears.data && availableYears.data.length > 0
+    ? Math.max(...availableYears.data)
+    : null
+  const selectedYear = selectedYearOverride ?? defaultYear
 
   // Nuværende års data
   const currentYearData = selectedYear !== null ? allData.data?.get(selectedYear) : undefined

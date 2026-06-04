@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useLoendata } from '../hooks/useLoendata'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import {
@@ -61,16 +61,20 @@ export default function Loendata() {
 
   const update = (partial: Partial<LoenFilter>) => setFilter((f) => ({ ...f, ...partial }))
 
-  // Default til seneste periode
-  useEffect(() => {
+  // Default til seneste periode når data indlæses — setState under render (uden effekt)
+  const [prevPerioder, setPrevPerioder] = useState(perioder)
+  if (perioder !== prevPerioder) {
+    setPrevPerioder(perioder)
     if (perioder.length > 0 && filter.perioder.length === 0) {
       const seneste = perioder[perioder.length - 1]
       setFilter((f) => ({ ...f, perioder: [seneste] }))
     }
-  }, [perioder]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
-  // Ryd irrelevante filtre ved skift af tabelfordeling
-  useEffect(() => {
+  // Ryd irrelevante filtre ved skift af tabelfordeling — setState under render (uden effekt)
+  const [prevTabelfordeling, setPrevTabelfordeling] = useState(tabelfordeling)
+  if (tabelfordeling !== prevTabelfordeling) {
+    setPrevTabelfordeling(tabelfordeling)
     setFilter((f) => ({
       ...f,
       personalekategorier: harDim('personalekategori') ? f.personalekategorier : [],
@@ -78,7 +82,7 @@ export default function Loendata() {
       loentrin: harDim('loentrin') ? f.loentrin : [],
       klasser: harDim('klasse') ? f.klasser : [],
     }))
-  }, [tabelfordeling]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // Filtreret data (alle filtre UNDTAGEN hovedkonto/ministerområde/type)
   const filtreret = useMemo(() => {
