@@ -113,6 +113,9 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
 
   const total = rects.reduce((sum, r) => sum + r.node.values.F, 0)
 
+  const svgTitleId = 'treemap-title'
+  const svgDescId = 'treemap-desc'
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
       <div className="flex items-center justify-between mb-4">
@@ -125,7 +128,18 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
       </div>
 
       <div className="relative">
-        <svg width="100%" viewBox="0 0 400 250" className="rounded-lg overflow-hidden">
+        <svg
+          width="100%"
+          viewBox="0 0 400 250"
+          className="rounded-lg overflow-hidden"
+          role="img"
+          aria-labelledby={`${svgTitleId} ${svgDescId}`}
+        >
+          <title id={svgTitleId}>Budget fordelt på ministerier</title>
+          <desc id={svgDescId}>
+            Treemap der viser {rects.length} ministeriers budgetandele. Samlet budget: {formatBudgetCompact(total)}.
+          </desc>
+
           {rects.map((rect) => {
             const isHovered = hoveredNode?.code === rect.node.code
 
@@ -145,6 +159,7 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
                   onMouseEnter={() => setHoveredNode(rect.node)}
                   onMouseLeave={() => setHoveredNode(null)}
                   onClick={() => onSelectNode?.(rect.node)}
+                  aria-label={`§ ${rect.node.code} ${rect.node.name}: ${formatBudgetCompact(rect.node.values.F)}, ${((rect.node.values.F / total) * 100).toFixed(1)}% af total`}
                 />
 
                 {/* Label (kun hvis stort nok) */}
@@ -155,6 +170,7 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className="fill-white text-[9px] font-medium pointer-events-none"
+                    aria-hidden="true"
                   >
                     <tspan x={rect.x + rect.width / 2} dy="-0.3em">
                       § {rect.node.code}
@@ -173,7 +189,7 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
 
         {/* Tooltip */}
         {hoveredNode && (
-          <div className="absolute top-2 right-2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg max-w-[200px]">
+          <div className="absolute top-2 right-2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg max-w-[200px]" aria-hidden="true">
             <div className="font-medium">§ {hoveredNode.code}</div>
             <div className="text-gray-300 truncate">{hoveredNode.name}</div>
             <div className="text-gray-100 font-medium mt-1">
@@ -185,6 +201,29 @@ export default function Treemap({ data, onSelectNode }: TreemapProps) {
           </div>
         )}
       </div>
+
+      {/* Skærmlæser-datatabel */}
+      <table className="sr-only">
+        <caption>Budget fordelt på ministerier – {rects.length} ministerier, samlet {formatBudgetCompact(total)}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Paragraf</th>
+            <th scope="col">Ministerium</th>
+            <th scope="col">Bevilling</th>
+            <th scope="col">Andel</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rects.map((rect) => (
+            <tr key={rect.node.code}>
+              <td>§ {rect.node.code}</td>
+              <td>{rect.node.name}</td>
+              <td>{formatBudgetCompact(rect.node.values.F)}</td>
+              <td>{((rect.node.values.F / total) * 100).toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {/* Mini-legend */}
       <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">

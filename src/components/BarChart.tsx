@@ -7,8 +7,14 @@ interface BarChartProps {
 export default function BarChart({ data, title, subtitle }: BarChartProps) {
   const max = Math.max(...data.map((d) => d.value), 1)
 
+  const ariaLabel = `${title}${subtitle ? ` – ${subtitle}` : ''}: søjlediagram med ${data.length} datapunkter`
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+    <div
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6"
+      role="img"
+      aria-label={ariaLabel}
+    >
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{title}</h3>
       {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{subtitle}</p>}
       {!subtitle && <div className="mb-3" />}
@@ -33,6 +39,25 @@ export default function BarChart({ data, title, subtitle }: BarChartProps) {
           </div>
         ))}
       </div>
+
+      {/* Skærmlæser-datatabel */}
+      <table className="sr-only">
+        <caption>{title}{subtitle ? ` – ${subtitle}` : ''}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Kategori</th>
+            <th scope="col">Værdi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((item) => (
+            <tr key={item.label}>
+              <td>{item.label}</td>
+              <td>{item.value.toLocaleString('da-DK')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
