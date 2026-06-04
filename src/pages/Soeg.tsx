@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useSager } from '../hooks/useSager'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { usePerioder } from '../hooks/useAktstykker'
 import SearchBar from '../components/SearchBar'
 import FilterPanel from '../components/FilterPanel'
@@ -11,6 +12,7 @@ import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
 const PAGE_SIZE = 20
 
 export default function Soeg() {
+  useDocumentTitle('Søg i sager')
   const [searchParams] = useSearchParams()
   const initialQuery = searchParams.get('q') || ''
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSagerTotal, useAfstemningerTotal, useSagerPerType, useAktstykkerPerMinisterium, useAlmDelOpdelt, useLovforslagPerStatus } from '../hooks/useStatistik'
 import { usePerioder } from '../hooks/useAktstykker'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { periodeLabel } from '../types/ft'
 import StatKort from '../components/StatKort'
 import BarChart from '../components/BarChart'
@@ -24,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function Statistik() {
+  useDocumentTitle('Statistik')
   const perioder = usePerioder()
   const defaultPeriode = useDefaultPeriode(perioder.data)
 

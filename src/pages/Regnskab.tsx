@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAllRegnskab, useAvailableRegnskabYears } from '../hooks/useRegnskab'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { RegnskabNode, HierarchyLevel } from '../lib/regnskab/types'
 import { LEVEL_LABELS, COMPARE_COLORS } from '../lib/regnskab/types'
 import { formatRegnskab, formatRegnskabCompact, formatDanishNumber } from '../lib/regnskab/formatter'
@@ -10,6 +11,7 @@ interface CompareItem {
 }
 
 export default function Regnskab() {
+  useDocumentTitle('Regnskab')
   // Hent tilgængelige år og alle data
   const availableYears = useAvailableRegnskabYears()
   const allData = useAllRegnskab()

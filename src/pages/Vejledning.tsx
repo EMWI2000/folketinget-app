@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 interface Section {
   id: string
@@ -9,6 +10,7 @@ interface Section {
 }
 
 export default function Vejledning() {
+  useDocumentTitle('Vejledning')
   const [openSection, setOpenSection] = useState<string | null>('intro')
 
   const sections: Section[] = [

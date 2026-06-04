@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useLoendata } from '../hooks/useLoendata'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import {
   filtrerData,
   beregnBenchmark,
@@ -18,6 +19,7 @@ import LoenTidsserie from '../components/loendata/LoenTidsserie'
 import LoenKomponentChart from '../components/loendata/LoenKomponentChart'
 
 export default function Loendata() {
+  useDocumentTitle('Løndata')
   const [tabelfordeling, setTabelfordeling] = useState<TabelfordelingId>('pkat')
   const { data: rawData, isLoading, error } = useLoendata(tabelfordeling)
 

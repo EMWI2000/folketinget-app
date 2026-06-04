@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import StyrelsesbenchmarkContent from '../components/styrelser/StyrelsesbenchmarkContent'
 import StyrelseRegnskabContent from '../components/styrelser/StyrelseRegnskabContent'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 type TabType = 'finanslov' | 'regnskab'
 
 export default function Styrelser() {
+  useDocumentTitle('Styrelser')
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = (searchParams.get('tab') as TabType) || 'finanslov'
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)

@@ -18,7 +18,7 @@ export default function FilterPanel({ selectedType, onTypeChange }: FilterPanelP
         className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
           selectedType === null
             ? 'bg-ft-red text-white'
-            : 'bg-white text-gray-600 border border-gray-200 hover:border-ft-red/30'
+            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-ft-red/30'
         }`}
       >
         Alle typer
@@ -30,7 +30,7 @@ export default function FilterPanel({ selectedType, onTypeChange }: FilterPanelP
           className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
             selectedType === type.id
               ? 'bg-ft-red text-white'
-              : 'bg-white text-gray-600 border border-gray-200 hover:border-ft-red/30'
+              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-ft-red/30'
           }`}
         >
           {type.label}

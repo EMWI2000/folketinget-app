@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useAllFinanslov, useFinanslovSearch, useAvailableYears } from '../hooks/useFinanslov'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { BudgetNode, CompareItem, HierarchyLevel, ValueKey } from '../lib/finanslov/types'
 import { COMPARE_COLORS, VALUE_KEY_LABELS } from '../lib/finanslov/types'
 import { exportComparisonCSV, exportYearCSV } from '../lib/finanslov/export'
@@ -9,6 +10,7 @@ import CompareCanvas from '../components/finanslov/CompareCanvas'
 import LineChart from '../components/finanslov/LineChart'
 
 export default function Finanslov() {
+  useDocumentTitle('Finanslov')
   // Hent tilgængelige år og alle data
   const availableYears = useAvailableYears()
   const allData = useAllFinanslov()

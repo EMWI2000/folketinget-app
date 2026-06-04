@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useSoegMedlemmer, useMedlemParti, useMedlemSager } from '../hooks/useMedlem'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { usePerioder } from '../hooks/useAktstykker'
 import { SAG_TYPER, SAG_STATUS, SAGAKTØR_ROLLER, periodeLabel } from '../types/ft'
 import type { Aktør } from '../types/ft'
@@ -16,6 +17,7 @@ export default function Medlem() {
   const [selectedRolle, setSelectedRolle] = useState<number | undefined>(undefined)
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
   const [visAlle, setVisAlle] = useState(false)
+  useDocumentTitle(selectedMedlem?.navn || 'Medlemmer')
 
   const soegResultater = useSoegMedlemmer(navnSoeg)
   const parti = useMedlemParti(selectedMedlem?.id ?? null)

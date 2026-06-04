@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useSenesteSager } from '../hooks/useSeneste'
 import { useAfstemninger } from '../hooks/useAfstemninger'
 import { useSagerTotal, useAfstemningerTotal } from '../hooks/useStatistik'
@@ -33,6 +34,7 @@ function ErrorBox({ message }: { message: string }) {
 }
 
 export default function Dashboard() {
+  useDocumentTitle()
   const perioder = usePerioder()
   const defaultPeriode = useDefaultPeriode(perioder.data)
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)
