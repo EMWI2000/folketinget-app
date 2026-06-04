@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { parseRegnskabCSV, parseAllRegnskab, fetchAvailableRegnskabYears } from '../lib/regnskab/parser'
+import { fetchAvailableRegnskabYears } from '../lib/regnskab/parser'
+import { parseRegnskabInWorker, parseAllRegnskabInWorker } from '../lib/parseClient'
 import type { RegnskabData } from '../lib/regnskab/types'
 
 /** Hook til at hente tilgængelige regnskabsår */
@@ -16,7 +17,7 @@ export function useAvailableRegnskabYears() {
 export function useRegnskab(year: number) {
   return useQuery({
     queryKey: ['regnskab', year],
-    queryFn: () => parseRegnskabCSV(year),
+    queryFn: () => parseRegnskabInWorker(year),
     staleTime: Infinity, // Data ændrer sig aldrig
     gcTime: 30 * 60 * 1000, // Hold i cache i 30 min
   })
@@ -26,7 +27,7 @@ export function useRegnskab(year: number) {
 export function useAllRegnskab() {
   return useQuery({
     queryKey: ['regnskab', 'all'],
-    queryFn: parseAllRegnskab,
+    queryFn: parseAllRegnskabInWorker,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
   })
