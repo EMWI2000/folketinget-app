@@ -27,15 +27,15 @@ export default function LoenBarChart({ data, selectedNavne, metric }: LoenBarCha
   const chartTitle = isLon ? 'Samlet løn (vægtet gns. kr./md.)' : 'Årsværk (sum)'
 
   return (
-    <div
-      className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4"
-      role="img"
-      aria-label={`${chartTitle}: søjlediagram med ${selectedData.length} sammenligninger`}
-    >
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4">
       <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
         {chartTitle}
       </h3>
-      <div className="space-y-3">
+      <div
+        className="space-y-3"
+        role="img"
+        aria-label={`${chartTitle}: søjlediagram med ${selectedData.length} sammenligninger`}
+      >
         {[...selectedData]
           .sort((a, b) => b[metric] - a[metric])
           .map((row) => {

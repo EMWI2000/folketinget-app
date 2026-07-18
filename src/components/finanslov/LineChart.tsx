@@ -324,14 +324,14 @@ export default function LineChart({
   }
 
   return (
-    <div
-      className="bg-white dark:bg-gray-800 rounded-xl shadow p-4"
-      role="img"
-      aria-label={`${svgTitleText} – ${svgDescText}`}
-    >
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">{title}</h4>
 
-      <div className="relative">
+      <div
+        className="relative"
+        role="img"
+        aria-label={`${svgTitleText} – ${svgDescText}`}
+      >
         <svg
           width="100%"
           viewBox={`0 0 ${width} ${height}`}

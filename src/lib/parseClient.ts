@@ -12,23 +12,61 @@ type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : n
 
 let worker: Worker | null = null
 let nextId = 0
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
+const REQUEST_TIMEOUT_MS = 30_000
+
+interface PendingRequest {
+  resolve: (value: unknown) => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+  worker: Worker
+}
+
+const pending = new Map<number, PendingRequest>()
+
+function asError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error
+  return new Error(typeof error === 'string' ? error : fallback)
+}
+
+function failWorker(failedWorker: Worker, error: Error): void {
+  // En hændelse fra en allerede erstattet worker må ikke påvirke den nye.
+  if (worker !== failedWorker) return
+
+  worker = null
+  failedWorker.terminate()
+
+  for (const [id, request] of pending) {
+    if (request.worker !== failedWorker) continue
+    clearTimeout(request.timeout)
+    pending.delete(id)
+    request.reject(error)
+  }
+}
 
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(new URL('./parseWorker.ts', import.meta.url), { type: 'module' })
-    worker.onmessage = (e: MessageEvent<ParseResponse>) => {
+    const newWorker = new Worker(new URL('./parseWorker.ts', import.meta.url), { type: 'module' })
+    worker = newWorker
+
+    newWorker.onmessage = (e: MessageEvent<ParseResponse>) => {
       const msg = e.data
       const p = pending.get(msg.id)
-      if (!p) return
+      // Ignorer svar, der er forsinkede eller kommer fra en erstattet worker.
+      if (!p || p.worker !== newWorker) return
       pending.delete(msg.id)
+      clearTimeout(p.timeout)
       if (msg.ok) p.resolve(msg.result)
       else p.reject(new Error(msg.error))
     }
-    worker.onerror = (e) => {
+
+    newWorker.onerror = (e) => {
+      e.preventDefault()
       const err = new Error(e.message || 'Fejl i parse-worker')
-      for (const p of pending.values()) p.reject(err)
-      pending.clear()
+      failWorker(newWorker, err)
+    }
+
+    newWorker.onmessageerror = () => {
+      failWorker(newWorker, new Error('Kunne ikke afkode svar fra parse-worker'))
     }
   }
   return worker
@@ -37,8 +75,36 @@ function getWorker(): Worker {
 function send<T>(req: DistributiveOmit<ParseRequest, 'id'>): Promise<T> {
   const id = nextId++
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
-    getWorker().postMessage({ ...req, id })
+    let targetWorker: Worker
+    try {
+      targetWorker = getWorker()
+    } catch (error) {
+      reject(asError(error, 'Kunne ikke starte parse-worker'))
+      return
+    }
+
+    const timeout = setTimeout(() => {
+      const request = pending.get(id)
+      if (!request || request.worker !== targetWorker) return
+
+      failWorker(
+        targetWorker,
+        new Error(`Parse-worker svarede ikke inden for ${REQUEST_TIMEOUT_MS / 1000} sekunder`),
+      )
+    }, REQUEST_TIMEOUT_MS)
+
+    pending.set(id, {
+      resolve: resolve as (value: unknown) => void,
+      reject,
+      timeout,
+      worker: targetWorker,
+    })
+
+    try {
+      targetWorker.postMessage({ ...req, id })
+    } catch (error) {
+      failWorker(targetWorker, asError(error, 'Kunne ikke sende til parse-worker'))
+    }
   })
 }
 

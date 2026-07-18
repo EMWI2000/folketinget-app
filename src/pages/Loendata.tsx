@@ -18,6 +18,10 @@ import LoenBarChart from '../components/loendata/LoenBarChart'
 import LoenTidsserie from '../components/loendata/LoenTidsserie'
 import LoenKomponentChart from '../components/loendata/LoenKomponentChart'
 
+type LoenFilterState = Omit<LoenFilter, 'perioder'> & {
+  perioder: string[] | null
+}
+
 export default function Loendata() {
   useDocumentTitle('Løndata')
   const [tabelfordeling, setTabelfordeling] = useState<TabelfordelingId>('pkat')
@@ -27,7 +31,11 @@ export default function Loendata() {
   const harDim = (dim: string) => aktivTabelfordeling.dimensioner.includes(dim as never)
 
   // Datafiltre
-  const [filter, setFilter] = useState<LoenFilter>(tomFilter)
+  // null betyder, at brugeren endnu ikke har valgt perioder eksplicit.
+  const [filter, setFilter] = useState<LoenFilterState>(() => ({
+    ...tomFilter(),
+    perioder: null,
+  }))
 
   // Benchmark-selection
   const [selectedNavne, setSelectedNavne] = useState<string[]>([])
@@ -59,17 +67,12 @@ export default function Loendata() {
     [rawData, tabelfordeling] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
-  const update = (partial: Partial<LoenFilter>) => setFilter((f) => ({ ...f, ...partial }))
+  const valgtePerioder = useMemo(
+    () => filter.perioder ?? (perioder.length > 0 ? [perioder[perioder.length - 1]] : []),
+    [filter.perioder, perioder]
+  )
 
-  // Default til seneste periode når data indlæses — setState under render (uden effekt)
-  const [prevPerioder, setPrevPerioder] = useState(perioder)
-  if (perioder !== prevPerioder) {
-    setPrevPerioder(perioder)
-    if (perioder.length > 0 && filter.perioder.length === 0) {
-      const seneste = perioder[perioder.length - 1]
-      setFilter((f) => ({ ...f, perioder: [seneste] }))
-    }
-  }
+  const update = (partial: Partial<LoenFilterState>) => setFilter((f) => ({ ...f, ...partial }))
 
   // Ryd irrelevante filtre ved skift af tabelfordeling — setState under render (uden effekt)
   const [prevTabelfordeling, setPrevTabelfordeling] = useState(tabelfordeling)
@@ -88,7 +91,7 @@ export default function Loendata() {
   const filtreret = useMemo(() => {
     if (!rawData) return []
     return filtrerData(rawData, {
-      perioder: filter.perioder,
+      perioder: valgtePerioder,
       ministeromraader: [],
       hovedkonti: [],
       typer: [],
@@ -97,7 +100,7 @@ export default function Loendata() {
       loentrin: filter.loentrin,
       klasser: filter.klasser,
     })
-  }, [rawData, filter.perioder, filter.personalekategorier, filter.stillinger, filter.loentrin, filter.klasser])
+  }, [rawData, valgtePerioder, filter.personalekategorier, filter.stillinger, filter.loentrin, filter.klasser])
 
   // Alle hovedkonti med benchmark-tal
   const alleBenchmark = useMemo(() => beregnBenchmark(filtreret), [filtreret])
@@ -305,14 +308,14 @@ export default function Loendata() {
               <button
                 key={p}
                 onClick={() => {
-                  if (filter.perioder.includes(p)) {
-                    update({ perioder: filter.perioder.filter((x) => x !== p) })
+                  if (valgtePerioder.includes(p)) {
+                    update({ perioder: valgtePerioder.filter((x) => x !== p) })
                   } else {
-                    update({ perioder: [...filter.perioder, p] })
+                    update({ perioder: [...valgtePerioder, p] })
                   }
                 }}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  filter.perioder.includes(p)
+                  valgtePerioder.includes(p)
                     ? 'bg-ft-red text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
