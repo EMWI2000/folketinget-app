@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useSag, useSagDokumenter, useSagAktører, useSagEmneord } from '../hooks/useSager'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { SAG_TYPER, SAG_STATUS } from '../types/ft'
 import DokumentListe from '../components/DokumentListe'
 import AktørListe from '../components/AktørListe'
@@ -26,6 +27,7 @@ function getStatusColor(statusid: number): string {
 export default function SagSide() {
   const { id } = useParams<{ id: string }>()
   const { data: sag, isLoading, error } = useSag(id ? Number(id) : null)
+  useDocumentTitle(sag?.titelkort || sag?.titel || 'Sag')
 
   // Hent relaterede data baseret på expand-data i sag
   const dokumentIds = sag?.SagDokument?.map((sd) => sd.dokumentid) ?? []

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { useSenesteSager } from '../hooks/useSeneste'
 import { useAfstemninger } from '../hooks/useAfstemninger'
 import { useSagerTotal, useAfstemningerTotal } from '../hooks/useStatistik'
@@ -7,7 +8,8 @@ import { usePerioder } from '../hooks/useAktstykker'
 import SagKort from '../components/SagKort'
 import AfstemningKort from '../components/AfstemningKort'
 import StatKort from '../components/StatKort'
-import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import PeriodeSelect from '../components/PeriodeSelect'
+import { useDefaultPeriode } from '../hooks/useDefaultPeriode'
 import WatchlistPanel from '../components/WatchlistPanel'
 
 function LoadingSkeleton() {
@@ -33,6 +35,7 @@ function ErrorBox({ message }: { message: string }) {
 }
 
 export default function Dashboard() {
+  useDocumentTitle()
   const perioder = usePerioder()
   const defaultPeriode = useDefaultPeriode(perioder.data)
   const [selectedPeriode, setSelectedPeriode] = useState<number | null>(null)

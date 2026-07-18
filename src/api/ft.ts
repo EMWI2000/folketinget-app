@@ -20,12 +20,33 @@ function buildUrl(endpoint: string, params: QueryParams = {}): string {
   return paramStr ? `${BASE_URL}/${endpoint}?${paramStr}` : `${BASE_URL}/${endpoint}`
 }
 
-async function fetchApi<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`API fejl: ${res.status} ${res.statusText}`)
+/**
+ * Escaper enkeltanførselstegn i OData string-literaler ved at fordoble dem.
+ * Forhindrer at brugerinput kan bryde ud af en '...'-literal og manipulere $filter.
+ */
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''")
+}
+
+const DEFAULT_TIMEOUT_MS = 15000
+
+async function fetchApi<T>(url: string, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) {
+      throw new Error(`API fejl: ${res.status} ${res.statusText}`)
+    }
+    return await res.json()
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`API timeout efter ${timeoutMs} ms`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-  return res.json()
 }
 
 // ─── Sager ───────────────────────────────────────────────
@@ -41,7 +62,7 @@ export async function fetchSager(opts: {
   const filters: string[] = []
   if (opts.search) {
     // Case-insensitiv søgning i flere felter: titel, titelkort, resume, nummerprefix
-    const searchLower = opts.search.toLowerCase()
+    const searchLower = escapeODataString(opts.search.toLowerCase())
     const searchFilters = [
       `substringof('${searchLower}',tolower(titel))`,
       `substringof('${searchLower}',tolower(titelkort))`,
@@ -213,7 +234,7 @@ export async function fetchAktstykker(periodeid: number): Promise<ODataResponse<
 
 /** Søg efter MF'ere (typeid=5) med navn-søgning */
 export async function fetchSoegMedlemmer(navn: string): Promise<Aktør[]> {
-  const url = `${BASE_URL}/Akt%C3%B8r?%24filter=typeid%20eq%205%20and%20substringof('${encodeURIComponent(navn)}',navn)&%24top=50&%24orderby=efternavn&%24select=id,navn,fornavn,efternavn,typeid,gruppenavnkort,startdato,slutdato,opdateringsdato,periodeid,biografi`
+  const url = `${BASE_URL}/Akt%C3%B8r?%24filter=typeid%20eq%205%20and%20substringof('${encodeURIComponent(escapeODataString(navn))}',navn)&%24top=50&%24orderby=efternavn&%24select=id,navn,fornavn,efternavn,typeid,gruppenavnkort,startdato,slutdato,opdateringsdato,periodeid,biografi`
   const res = await fetchApi<ODataResponse<Aktør>>(url)
   return res.value
 }

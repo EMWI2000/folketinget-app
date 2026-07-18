@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useAllRegnskab, useAvailableRegnskabYears } from '../hooks/useRegnskab'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { RegnskabNode, HierarchyLevel } from '../lib/regnskab/types'
 import { LEVEL_LABELS, COMPARE_COLORS } from '../lib/regnskab/types'
 import { formatRegnskab, formatRegnskabCompact, formatDanishNumber } from '../lib/regnskab/formatter'
@@ -10,25 +11,24 @@ interface CompareItem {
 }
 
 export default function Regnskab() {
+  useDocumentTitle('Regnskab')
   // Hent tilgængelige år og alle data
   const availableYears = useAvailableRegnskabYears()
   const allData = useAllRegnskab()
 
   // UI state
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [selectedYearOverride, setSelectedYear] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [levelFilter, setLevelFilter] = useState<HierarchyLevel | null>(null)
   const [compareItems, setCompareItems] = useState<CompareItem[]>([])
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [regnskabskontoFilter, setRegnskabskontoFilter] = useState<string | null>(null)
 
-  // Sæt default år når data er indlæst
-  useEffect(() => {
-    if (availableYears.data && availableYears.data.length > 0 && selectedYear === null) {
-      // Vælg det nyeste år som default
-      setSelectedYear(Math.max(...availableYears.data))
-    }
-  }, [availableYears.data, selectedYear])
+  // Vælg nyeste år som default (afledt state — overstyres når brugeren vælger et år)
+  const defaultYear = availableYears.data && availableYears.data.length > 0
+    ? Math.max(...availableYears.data)
+    : null
+  const selectedYear = selectedYearOverride ?? defaultYear
 
   // Nuværende års data
   const currentYearData = selectedYear !== null ? allData.data?.get(selectedYear) : undefined

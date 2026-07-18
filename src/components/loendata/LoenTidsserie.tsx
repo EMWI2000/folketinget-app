@@ -69,18 +69,33 @@ export default function LoenTidsserie({ benchmarkPerPeriode, selectedNavne, metr
     return formatAarsvaerk(val)
   }
 
+  const chartTitle = `Udvikling over tid – ${isLon ? 'Samlet løn (kr./md.)' : 'Årsværk'}`
+  const svgTitleId = 'loen-tidsserie-title'
+  const svgDescId = 'loen-tidsserie-desc'
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4">
       <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-        Udvikling over tid – {isLon ? 'Samlet løn (kr./md.)' : 'Årsværk'}
+        {chartTitle}
       </h3>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <svg
+        width="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        className="overflow-visible"
+        role="img"
+        aria-labelledby={`${svgTitleId} ${svgDescId}`}
+      >
+        <title id={svgTitleId}>{chartTitle}</title>
+        <desc id={svgDescId}>
+          Linjediagram med {seriesData.length} serie{seriesData.length !== 1 ? 'r' : ''} over {allPerioder.length} perioder ({allPerioder[0]}–{allPerioder[allPerioder.length - 1]})
+        </desc>
+
         {/* Gridlines */}
         {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
           const val = minVal + pct * range
           return (
-            <g key={pct}>
+            <g key={pct} aria-hidden="true">
               <line
                 x1={padding.left}
                 y1={yScale(val)}
@@ -115,6 +130,7 @@ export default function LoenTidsserie({ benchmarkPerPeriode, selectedNavne, metr
               y={height - 8}
               textAnchor="middle"
               className="text-[11px] fill-gray-600 dark:fill-gray-400"
+              aria-hidden="true"
             >
               {short}
             </text>
@@ -141,6 +157,7 @@ export default function LoenTidsserie({ benchmarkPerPeriode, selectedNavne, metr
                 strokeWidth={2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                aria-hidden="true"
               />
               {series.points.map((p) => {
                 const xIdx = allPerioder.indexOf(p.periode)
@@ -165,11 +182,35 @@ export default function LoenTidsserie({ benchmarkPerPeriode, selectedNavne, metr
         })}
       </svg>
 
+      {/* Skærmlæser-datatabel */}
+      <table className="sr-only">
+        <caption>{chartTitle}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Konto</th>
+            {allPerioder.map((p) => (
+              <th key={p} scope="col">{p}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {seriesData.map((series) => (
+            <tr key={series.navn}>
+              <td>{series.navn}</td>
+              {allPerioder.map((p) => {
+                const point = series.points.find((pt) => pt.periode === p)
+                return <td key={p}>{point ? formatY(point.value) : '–'}</td>
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
         {seriesData.map((s) => (
           <div key={s.navn} className="flex items-center gap-1.5 text-xs">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} aria-hidden="true" />
             <span className="text-gray-600 dark:text-gray-400 truncate max-w-[180px]">{s.label}</span>
           </div>
         ))}

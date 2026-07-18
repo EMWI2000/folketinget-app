@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { usePerioder, useAktstykker } from '../hooks/useAktstykker'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import type { Periode } from '../types/ft'
 import type { Sag } from '../types/ft'
 import StatKort from '../components/StatKort'
-import PeriodeSelect, { useDefaultPeriode } from '../components/PeriodeSelect'
+import PeriodeSelect from '../components/PeriodeSelect'
+import { useDefaultPeriode } from '../hooks/useDefaultPeriode'
 
 import AiSammenfatning from '../components/AiSammenfatning'
 import CopyButton from '../components/CopyButton'
@@ -112,6 +114,7 @@ function aktstykkeFtUrl(sag: Sag, periodeKode: string | null): string | null {
 }
 
 export default function Aktstykker() {
+  useDocumentTitle('Aktstykker')
   const perioder = usePerioder()
   const defaultPeriode = useDefaultPeriode(perioder.data)
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useAllRegnskab, useAvailableRegnskabYears } from '../../hooks/useRegnskab'
 import { findAgenciesWithAccounts, REGNSKABSKONTO_CATEGORIES, type AgencyWithAccounts } from '../../lib/regnskab/agencies'
 import { formatRegnskabCompact, formatRegnskab } from '../../lib/regnskab/formatter'
@@ -22,7 +22,7 @@ export default function StyrelseRegnskabContent() {
   const allData = useAllRegnskab()
 
   // State
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [selectedYearOverride, setSelectedYear] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedAgencies, setSelectedAgencies] = useState<SelectedAgency[]>([])
   const [sortBy, setSortBy] = useState<'name' | 'total' | 'ministry'>('total')
@@ -30,12 +30,11 @@ export default function StyrelseRegnskabContent() {
   const [kontoFilter, setKontoFilter] = useState<string | null>(null)
   const [showDetailLevel, setShowDetailLevel] = useState(false)
 
-  // Sæt default år
-  useEffect(() => {
-    if (availableYears.data && availableYears.data.length > 0 && selectedYear === null) {
-      setSelectedYear(Math.max(...availableYears.data))
-    }
-  }, [availableYears.data, selectedYear])
+  // Vælg nyeste år som default (afledt state — overstyres når brugeren vælger et år)
+  const defaultYear = availableYears.data && availableYears.data.length > 0
+    ? Math.max(...availableYears.data)
+    : null
+  const selectedYear = selectedYearOverride ?? defaultYear
 
   // Nuværende data
   const currentYearData = selectedYear !== null ? allData.data?.get(selectedYear) : undefined
@@ -159,7 +158,7 @@ export default function StyrelseRegnskabContent() {
       })
       .filter((row) => row.values.some((v) => v.valueYear1 !== 0 || v.valueYear2 !== 0))
       .sort((a, b) => a.code.localeCompare(b.code))
-  }, [selectedAgencies, kontoFilter, showYear1])
+  }, [selectedAgencies, kontoFilter])
 
   // Tidsserie data
   const timeSeriesData = useMemo(() => {

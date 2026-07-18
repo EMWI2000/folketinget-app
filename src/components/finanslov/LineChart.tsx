@@ -165,11 +165,26 @@ export default function LineChart({
     )
   }
 
+  const svgTitleId = 'linechart-title'
+  const svgDescId = 'linechart-desc'
+  const svgTitleText = title
+  const svgDescText = `Linjediagram med ${items.length} serie${items.length !== 1 ? 'r' : ''} over ${allYears.length} år (${allYears[0]}–${allYears[allYears.length - 1]})`
+
   // Large mode - ingen wrapper
   if (large) {
     return (
       <div className="relative h-full">
-        <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" className="overflow-visible">
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="overflow-visible"
+          role="img"
+          aria-labelledby={`${svgTitleId}-large ${svgDescId}-large`}
+        >
+          <title id={`${svgTitleId}-large`}>{svgTitleText}</title>
+          <desc id={`${svgDescId}-large`}>{svgDescText}</desc>
           {/* Gridlines */}
           {yTicks.map((tick) => (
             <line
@@ -181,6 +196,7 @@ export default function LineChart({
               stroke="currentColor"
               className="text-gray-100 dark:text-gray-700"
               strokeWidth={1}
+              aria-hidden="true"
             />
           ))}
 
@@ -193,6 +209,7 @@ export default function LineChart({
               textAnchor="end"
               dominantBaseline="middle"
               className="text-[10px] fill-gray-500 dark:fill-gray-400"
+              aria-hidden="true"
             >
               {formatBudgetCompact(tick)}
             </text>
@@ -206,6 +223,7 @@ export default function LineChart({
               y={height - 8}
               textAnchor="middle"
               className="text-[11px] fill-gray-600 dark:fill-gray-400 font-medium"
+              aria-hidden="true"
             >
               {year}
             </text>
@@ -226,6 +244,7 @@ export default function LineChart({
                   strokeWidth={2.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 />
                 {line.points.map((p) => (
                   <circle
@@ -237,6 +256,7 @@ export default function LineChart({
                     stroke="white"
                     strokeWidth={2}
                     className="cursor-pointer"
+                    aria-label={`${line.item.node.name} ${p.year}: ${formatBudgetCompact(p.value)}`}
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect()
                       setHoveredPoint({
@@ -264,6 +284,7 @@ export default function LineChart({
               top: hoveredPoint.y - 8,
               transform: 'translate(-50%, -100%)',
             }}
+            aria-hidden="true"
           >
             <div className="font-medium">{hoveredPoint.item.node.name}</div>
             <div className="text-gray-300">
@@ -274,6 +295,30 @@ export default function LineChart({
             </div>
           </div>
         )}
+
+        {/* Skærmlæser-datatabel */}
+        <table className="sr-only">
+          <caption>{title}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Konto</th>
+              {allYears.map((year) => (
+                <th key={year} scope="col">{year}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line) => (
+              <tr key={line.item.node.id}>
+                <td>{line.item.node.code} {line.item.node.name}</td>
+                {allYears.map((year) => {
+                  const point = line.points.find((p) => p.year === year)
+                  return <td key={year}>{point ? formatBudgetCompact(point.value) : '–'}</td>
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     )
   }
@@ -282,8 +327,17 @@ export default function LineChart({
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">{title}</h4>
 
-      <div className="relative">
-        <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <div
+        className="relative"
+        role="img"
+        aria-label={`${svgTitleText} – ${svgDescText}`}
+      >
+        <svg
+          width="100%"
+          viewBox={`0 0 ${width} ${height}`}
+          className="overflow-visible"
+          aria-hidden="true"
+        >
           {/* Gridlines */}
           {yTicks.map((tick) => (
             <line
@@ -382,6 +436,7 @@ export default function LineChart({
               top: hoveredPoint.y - 8,
               transform: 'translate(-50%, -100%)',
             }}
+            aria-hidden="true"
           >
             <div className="font-medium">{hoveredPoint.item.node.name}</div>
             <div className="text-gray-300">
@@ -394,11 +449,35 @@ export default function LineChart({
         )}
       </div>
 
+      {/* Skærmlæser-datatabel */}
+      <table className="sr-only">
+        <caption>{title}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Konto</th>
+            {allYears.map((year) => (
+              <th key={year} scope="col">{year}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((line) => (
+            <tr key={line.item.node.id}>
+              <td>{line.item.node.code} {line.item.node.name}</td>
+              {allYears.map((year) => {
+                const point = line.points.find((p) => p.year === year)
+                return <td key={year}>{point ? formatBudgetCompact(point.value) : '–'}</td>
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-4">
         {items.map((item) => (
           <div key={item.node.id} className="flex items-center gap-1.5 text-xs">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
             <span className="text-gray-600 dark:text-gray-400 truncate max-w-[150px]">
               {item.node.code} {item.node.name}
             </span>

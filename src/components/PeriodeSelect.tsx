@@ -19,7 +19,8 @@ export default function PeriodeSelect({ perioder, value, onChange, showAll }: Pe
     <select
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-      className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
+      aria-label="Vælg samling"
+      className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-ft-red/30"
     >
       {showAll && <option value="">Alle samlinger</option>}
       {samlinger.map((p) => (
@@ -27,12 +28,4 @@ export default function PeriodeSelect({ perioder, value, onChange, showAll }: Pe
       ))}
     </select>
   )
-}
-
-export function useDefaultPeriode(perioder: Periode[] | undefined): number | null {
-  return useMemo(() => {
-    if (!perioder) return null
-    const samlinger = perioder.filter((p) => p.type === 'samling')
-    return samlinger[0]?.id ?? null
-  }, [perioder])
 }
